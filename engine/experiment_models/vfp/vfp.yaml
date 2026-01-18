@@ -1,0 +1,27 @@
+algorithm: sequential
+runtime_config_path: engine/algorithms/utils/picknplace.json
+checkpoint_path: engine/experiment_models/naive_flow_matching/ckpts/exp1
+
+model:
+  component_config_paths:
+    action_decoder: engine/experiment_models/naive_flow_matching/model_components/action_decoder.yaml
+    backbone: engine/experiment_models/naive_flow_matching/model_components/backbone.yaml
+    da3: engine/experiment_models/naive_flow_matching/model_components/da3.yaml
+    proprio_projector: engine/experiment_models/naive_flow_matching/model_components/proprio_projector.yaml
+
+policy:
+  type: naive_flow_matching_policy
+  params:
+    num_ode_sim_steps: 5
+    state_dim: 48
+    action_dim: 24
+    num_queries: 40
+    num_robot_observations: 40
+    num_image_observations: 1
+    image_observation_skip: 1
+    camera_names: [head, left, right]
+    stats_path: /path/to/stats/picknplace_stats.pkl
+    stats_eps: 1e-6
+plugins:
+  - engine.experiment_models.naive_flow_matching.naive_flow_matching
+# hz: 20

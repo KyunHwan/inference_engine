@@ -1,0 +1,23 @@
+# Real-time action chunking example for the pick-and-place runtime config.
+# Update checkpoint_path and stats_path to match your local artifacts.
+algorithm: real_time_action_chunking
+runtime_config_path: engine/algorithms/utils/picknplace.json
+checkpoint_path: /path/to/checkpoints/picknplace
+model:
+  component_config_paths:
+    policy: policy_constructor/configs/experiments/cfg_vqvae_flow_matching.yaml
+policy:
+  type: component_policy
+  params:
+    state_dim: 62
+    action_dim: 24
+    num_queries: 40
+    num_robot_observations: 40
+    num_image_observations: 2
+    image_observation_skip: 1
+    camera_names: [head, left, right]
+    stats_path: /path/to/stats/picknplace_stats.pkl
+    stats_eps: 0.01
+plugins:
+  - engine.policies.plugins.component_policy
+# hz: 20

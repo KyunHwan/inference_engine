@@ -1,0 +1,315 @@
+import rclpy
+from rclpy.executors import SingleThreadedExecutor
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+from std_msgs.msg import Float32MultiArray, Bool
+from sensor_msgs.msg import JointState
+from engine.algorithms.utils.data_dict import GenericRecorder
+from engine.algorithms.utils.camera_utils import RBRSCamera
+
+import numpy as np
+import cv2
+
+import time
+import threading
+import signal
+from engine.algorithms.config.config_loader import ConfigLoader
+from engine.config.inference_schemas import PolicyConfig
+from engine.registry.plugins import load_plugins
+from engine.algorithms.utils.inference_utils import (
+    attach_shared_ndarray,
+    get_model_io_params,
+    get_runtime_config_params,
+    init_shared_action_chunk,
+    make_signal_handler,
+    motion_smoothing_setup,
+)
+
+def spin_thread(executer: SingleThreadedExecutor):
+    """Run rclpy executor in a background thread to service subscriptions."""
+    try:
+        executer.spin()
+    except Exception as e:
+        print(f"Error in spin thread: {e}")
+
+def ensure_array_shape(arr, expected_shape):
+    """
+    Return arr as np.float32 with exact expected shape.
+    If arr is None or has mismatched shape, return zeros.
+    """
+    if arr is None:
+        return np.zeros(expected_shape, dtype=np.float32)
+    arr = np.array(arr, dtype=np.float32)
+    if arr.shape != expected_shape:
+        return np.zeros(expected_shape, dtype=np.float32)
+    return arr
+
+def obs_dict_to_np_array(obs_dict: dict[str, np.ndarray], config: ConfigLoader) -> np.ndarray:
+    """
+    Flatten a structured observation dict into a single 1D state vector.
+    Field layout & slicing is driven by the runtime config.
+    Missing values are zero-filled to preserve shape and ordering.
+    """
+    expected_keys = config.get_observation_keys()
+    arrays = []
+    for key in expected_keys:
+        field_config = config.get_observation_field_config(key)
+        if key in obs_dict and obs_dict[key] is not None:
+            if key == "/observation/barcode":
+                arrays.append(np.array([1.0 if obs_dict[key] else 0.0], dtype=np.float32))
+            elif field_config == "pose.position":
+                arrays.append(ensure_array_shape(obs_dict[key], (3,)))
+            elif field_config == "pose.orientation":
+                arrays.append(ensure_array_shape(obs_dict[key], (4,)))
+            elif isinstance(field_config, dict) and "slice" in field_config:
+                s = field_config["slice"]
+                arrays.append(ensure_array_shape(obs_dict[key], (s[1] - s[0],)))
+            else:
+                # Default structural field size: 6 (e.g., twist or pose6D)
+                arrays.append(ensure_array_shape(obs_dict[key], (6,)))
+        else:
+            # Missing field → zero-fill with the expected shape
+            if key == "/observation/barcode":
+                arrays.append(np.array([0.0], dtype=np.float32))
+            elif field_config == "pose.position":
+                arrays.append(np.zeros((3,), dtype=np.float32))
+            elif field_config == "pose.orientation":
+                arrays.append(np.zeros((4,), dtype=np.float32))
+            elif isinstance(field_config, dict) and "slice" in field_config:
+                s = field_config["slice"]
+                arrays.append(np.zeros((s[1] - s[0],), dtype=np.float32))
+            else:
+                arrays.append(np.zeros((6,), dtype=np.float32))
+    return np.concatenate(arrays, axis=-1)
+
+
+
+
+
+
+
+
+def controller_interface(args, 
+                         rob_spec, 
+                         cam_spec, 
+                         act_spec, 
+                         shared_num_control_iters, 
+                         lock, 
+                         step_cond, 
+                         stop_event,
+                         shared_inference_ready_flag):
+    # Install signal handlers early
+    signal.signal(signal.SIGINT,  make_signal_handler(stop_event, step_cond))
+    signal.signal(signal.SIGTERM, make_signal_handler(stop_event, step_cond))
+    load_plugins(args.get("plugins", []))
+
+    rob_shm, shared_robot_obs_history  = attach_shared_ndarray(rob_spec)
+    cam_shm, shared_cam_images   = attach_shared_ndarray(cam_spec)
+    act_shm, shared_action_chunk = attach_shared_ndarray(act_spec)
+    with step_cond:
+        step_cond.wait_for(
+            lambda: stop_event.is_set() or shared_inference_ready_flag.value
+        )
+
+    with lock:
+        np.copyto(shared_action_chunk, 
+                  init_shared_action_chunk(shared_action_chunk.shape[0], dtype=shared_action_chunk.dtype),
+                  casting='no')
+        
+    try:
+        (config,
+        task_config,
+        robot_id,
+        camera_names,
+        HZ,
+        max_delta_deg,
+        _checkpoint_path,
+        inference_settings) = get_runtime_config_params(args)
+
+        image_width, image_height = config.get_image_resize()
+
+        policy_cfg = PolicyConfig.model_validate(args["policy"])
+        if set(camera_names) != set(policy_cfg.params.camera_names):
+            raise ValueError("Runtime camera_names does not match policy camera_names")
+
+        (state_dim,
+        action_dim,
+        num_queries,
+        num_robot_obs,
+        num_image_obs,
+        image_obs_every,
+        image_obs_history,
+        image_frame_counter) = get_model_io_params(
+            policy_cfg.params,
+            inference_settings,
+            camera_names,
+            (image_width, image_height),
+        )
+
+        # --- ROS2 publishers & executor ---
+        input_recorder = GenericRecorder(task_config)  # node providing observations/images
+
+        qos = QoSProfile(depth=10)
+        qos.reliability = QoSReliabilityPolicy.RELIABLE
+
+        joint_pub = input_recorder.create_publisher(JointState,
+                        f"/igris_b/{robot_id}/target_joints", qos_profile=qos)
+        finger_pub = input_recorder.create_publisher(Float32MultiArray,
+                        f"/igris_b/{robot_id}/finger_target", qos_profile=qos)
+        stop_publisher = input_recorder.create_publisher(Bool,
+                        f"/igris_b/{robot_id}/stop", qos_profile=qos)
+
+        executor = SingleThreadedExecutor()
+        executor.add_node(input_recorder)
+        thread = threading.Thread(target=spin_thread, args=(executor,), daemon=True)
+        thread.start()
+
+        # Wait until all required observation keys are ready at least once
+        test_dict = input_recorder.get_dict()
+        obs_keys = [key for key in test_dict.keys() if not key.startswith("/action")]
+        
+        
+        while not stop_event.is_set():
+            d = input_recorder.get_dict()
+            if all(d.get(k, None) is not None for k in obs_keys):
+                break
+            time.sleep(0.1)
+
+        # Deassert stop and optionally publish initial posture (kept commented by design)
+        # stop_publisher.publish(Bool(data=False))
+        print("Start published")
+        
+        # Initialize state
+        prev_joint, max_delta = motion_smoothing_setup(max_delta_deg)
+        joint_msg = JointState()
+        joint_msg.position = prev_joint.tolist()
+        joint_pub.publish(joint_msg)
+        time.sleep(2.0)
+
+        # Build initial robot state vector & bootstrap history with it
+        obs_dict = input_recorder.get_observation_dict()
+        robot_state = obs_dict_to_np_array(obs_dict, config)
+        shared_robot_obs_history[:] = np.repeat(robot_state.reshape(1, -1), num_robot_obs, axis=0)
+
+        if robot_state.shape[0] != state_dim:
+            raise ValueError(f'not match robot state shape({robot_state.shape}) and state_dim({state_dim})')
+
+        # --- Control loop timing ---
+        rate = input_recorder.create_rate(HZ)
+        DT = 1.0 / HZ
+        
+        # --- Camera setup --- #
+        head_cam = RBRSCamera(device_id1='/dev/head_camera1', device_id2='/dev/head_camera2')
+        left_cam = RBRSCamera(device_id1='/dev/left_camera1', device_id2='/dev/left_camera2')
+        right_cam = RBRSCamera(device_id1='/dev/right_camera1', device_id2='/dev/right_camera2')
+
+        cams = {
+            'head': head_cam, 
+            'left': left_cam, 
+            'right': right_cam
+        }
+        
+        for camera_name in camera_names:
+            try:
+                cams[camera_name].start()
+            except Exception as e:
+                print(f"Error starting camera: {e}")
+                exit(1)
+        
+        # Operator gate to start (avoid accidental motion)
+        print("Running controller...")
+        
+        next_t = time.perf_counter()
+        action = np.zeros_like(shared_action_chunk[0])
+        while not stop_event.is_set():
+            start_time = time.perf_counter()
+            
+            # --- Read latest inputs ---
+            obs_dict = input_recorder.get_observation_dict()
+
+            ################################# State Observation ###############################
+            # Pack/validate robot state
+            try:
+                robot_state = obs_dict_to_np_array(obs_dict, config)
+            except Exception as e:
+                print(f"Error getting robot state")
+                continue
+            
+            ################################### Camera observation #################################
+            
+            # Maintain per-camera image history with downscaled frames
+            cam_list = []
+            for cam_name in camera_names:
+                cur = cams[cam_name].get_image()
+                if cur is not None:
+                    cur = cv2.resize(
+                        cur,
+                        dsize=(image_width, image_height),
+                        interpolation=cv2.INTER_AREA,
+                    )
+                    cur = np.transpose(cur, (2, 0, 1))  # HWC → CHW
+                    if image_obs_every <= 1 or (image_frame_counter % image_obs_every == 0):
+                        if num_image_obs > 1:
+                            image_obs_history[cam_name][1:] = image_obs_history[cam_name][:-1]
+                        image_obs_history[cam_name][0] = cur
+                cam_list.append(image_obs_history[cam_name])
+            image_frame_counter += 1
+
+            if len(cam_list) == 0:
+                continue
+
+            # Aggregate all cameras: [num_cams, Timg, C, H, W] → batched float16
+            all_cam_images = np.stack(cam_list, axis=0)
+            
+            with lock:
+                shared_num_control_iters.value += 1
+                if num_robot_obs > 1:
+                    shared_robot_obs_history[1:] = shared_robot_obs_history[:-1]
+                np.copyto(shared_robot_obs_history[0], robot_state, casting='no')
+                #np.copyto(shared_robot_state, robot_state, casting='no')
+                np.copyto(shared_cam_images, all_cam_images, casting='no')
+                idx = min(shared_num_control_iters.value - 1, shared_action_chunk.shape[0] - 1)
+                np.copyto(action, shared_action_chunk[idx], casting='no')
+                step_cond.notify_all() 
+                #print(action)
+            # Split action vector into joint/finger segments
+            
+            left_joint_pos   = action[:6]
+            right_joint_pos  = action[6:12]
+            left_finger_pos  = action[12:18]
+            right_finger_pos = action[18:24]
+
+            # Merge to robot joint order (environment-specific; verify mapping)
+            raw_joint = np.concatenate([right_joint_pos, left_joint_pos])
+
+            # Slew-rate limiting per joint (rad/step)
+            delta = np.clip(raw_joint - prev_joint, -max_delta, max_delta)
+            smoothed = prev_joint + delta
+            prev_joint = smoothed
+
+            # Publish joints
+            joint_msg = JointState()
+            joint_msg.position = smoothed.tolist()
+            joint_pub.publish(joint_msg)
+
+            # Publish fingers (right followed by left to match action layout)
+            finger_msg = Float32MultiArray()
+            finger_msg.data = list(right_finger_pos) + list(left_finger_pos)
+            finger_pub.publish(finger_msg)
+            
+            # Maintain precise loop timing against drift
+            next_t += DT
+            sleep_time = next_t - time.perf_counter()
+            if sleep_time > 0.0:
+                time.sleep(sleep_time)
+            
+            # Periodic health print
+            #print(f"Current Control Frequency [Hz]: {1 / (time.perf_counter() - start_time)}")
+        
+        stop_event.set()
+        with step_cond:
+            step_cond.notify_all()
+
+        rclpy.shutdown()
+        pass
+    finally:
+        rob_shm.close(); cam_shm.close(); act_shm.close()
