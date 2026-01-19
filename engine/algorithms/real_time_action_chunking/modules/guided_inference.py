@@ -8,7 +8,7 @@ from torch.func import vjp
 def guided_action_chunk_inference(
     action_decoder: torch.nn.Module,
     cond_memory: torch.Tensor,
-    discrete_semantic_input: torch.Tensor,,
+    discrete_semantic_input: torch.Tensor,
     prev_action_chunk: Optional[torch.Tensor],
     delay: int,
     executed_steps: int,
