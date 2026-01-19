@@ -57,11 +57,16 @@ def inference_loop(policy,
         # Light warm-up to ensure CUDA kernels are initialized
         img_dtype = torch.float16 if device.type == "cuda" else torch.float32
         with torch.no_grad():
-            _ = policy.encode_memory(
-                torch.from_numpy(all_cam_images / 255.0).to(
+            memory = policy.encode_memory(
+                rh=torch.from_numpy(robot_obs_history).to(device=device, dtype=img_dtype, non_blocking=True),
+                cam_images = torch.from_numpy(all_cam_images / 255.0).to(
                     device=device, dtype=img_dtype, non_blocking=True
                 ).unsqueeze(0)
             )
+            _ = policy.action_decoder(time=torch.zeros(1, 1),
+                                      noise=torch.randn(1, num_queries, action_dim),
+                                      memory_input=memory['memory_input'],
+                                      discrete_semantic_input=memory['discrete_semantic_input'])
     # =========================
     #   MAIN CONTROL LOOP
     # =========================
@@ -115,13 +120,13 @@ def inference_loop(policy,
 
         # Guided policy update for real-time action chunking
         with torch.no_grad():
-            cond_memory, semantic_input = policy.encode_memory(rh, cam_images)
+            encoded_data = policy.encode_memory(rh, cam_images)
 
         with torch.enable_grad():
             new_actions = guided_action_chunk_inference(
-                action_decoder=policy.body,
-                cond_memory=cond_memory,
-                discrete_semantic_input=semantic_input,
+                action_decoder=policy.body(expert_id=encoded_data['expert_id']),
+                cond_memory=encoded_data['memory_input'],
+                discrete_semantic_input=encoded_data['discrete_semantic_input'],
                 prev_action_chunk=input_prev_action_chunk,
                 delay=int(est_delay),
                 executed_steps=int(num_actions_executed_from_last_infer),

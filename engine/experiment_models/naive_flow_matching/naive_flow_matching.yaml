@@ -20,7 +20,7 @@ policy:
     num_image_observations: 1
     image_observation_skip: 1
     camera_names: [head, left, right]
-    stats_path: /path/to/stats/picknplace_stats.pkl
+    stats_path: engine/experiment_models/naive_flow_matching/ckpts/exp1/dataset_stats.pkl
     stats_eps: 1e-6
 plugins:
   - engine.experiment_models.naive_flow_matching.naive_flow_matching

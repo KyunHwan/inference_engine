@@ -1,16 +1,18 @@
 algorithm: sequential
 runtime_config_path: engine/algorithms/utils/picknplace.json
-checkpoint_path: engine/experiment_models/naive_flow_matching/ckpts/exp1
+checkpoint_path: engine/experiment_models/vfp/ckpts/exp1/epoch_57
 
 model:
   component_config_paths:
-    action_decoder: engine/experiment_models/naive_flow_matching/model_components/action_decoder.yaml
-    backbone: engine/experiment_models/naive_flow_matching/model_components/backbone.yaml
-    da3: engine/experiment_models/naive_flow_matching/model_components/da3.yaml
-    proprio_projector: engine/experiment_models/naive_flow_matching/model_components/proprio_projector.yaml
+    backbone: engine/experiment_models/vfp/model_components/backbone.yaml
+    da3: engine/experiment_models/vfp/model_components/da3.yaml
+    proprio_projector: engine/experiment_models/vfp/model_components/proprio_projector.yaml
+    vqvae_prior: engine/experiment_models/vfp/model_components/vqvae_prior.yaml
+    gate: engine/experiment_models/vfp/model_components/gate.yaml
+    moe_action_decoder: engine/experiment_models/vfp/model_components/moe_action_decoder.yaml
 
 policy:
-  type: naive_flow_matching_policy
+  type: vfp
   params:
     num_ode_sim_steps: 5
     state_dim: 48
@@ -20,8 +22,8 @@ policy:
     num_image_observations: 1
     image_observation_skip: 1
     camera_names: [head, left, right]
-    stats_path: /path/to/stats/picknplace_stats.pkl
+    stats_path: engine/experiment_models/vfp/ckpts/exp1/dataset_stats.pkl
     stats_eps: 1e-6
 plugins:
-  - engine.experiment_models.naive_flow_matching.naive_flow_matching
+  - engine.experiment_models.vfp.vfp
 # hz: 20

@@ -118,6 +118,9 @@ class NaiveFlowMatchingPolicy(nn.Module):
     @torch.inference_mode()
     def encode_memory(self, rh: torch.Tensor, cam_images: torch.Tensor):
         data = self.org_data(rh, cam_images)
+        expert_id = None
+        discrete_semantic_input = None
+
         """ Backbone """
         with torch.no_grad():
             """ Radiov3 """
@@ -143,15 +146,18 @@ class NaiveFlowMatchingPolicy(nn.Module):
                                                                             left_image_features, 
                                                                             right_image_features],
                                                                             dim=1),)
-        
-        return  torch.cat([einops.rearrange(depth_head, 'b n h w d -> b (n h w) d'),
+        discrete_semantic_input = head_image_semantic
+        return {
+            'memory_input': torch.cat([einops.rearrange(depth_head, 'b n h w d -> b (n h w) d'),
                         einops.rearrange(depth_left, 'b n h w d -> b (n h w) d'),
                         einops.rearrange(depth_right, 'b n h w d -> b (n h w) d'),
-                        conditioning_info], dim=1),\
-                head_image_semantic
+                        conditioning_info], dim=1),
+            'discrete_semantic_input': discrete_semantic_input,
+            'expert_id': expert_id,
+        }
 
     @property
-    def body(self):
+    def body(self, expert_id: int | None = None):
         return self.action_decoder
 
 
