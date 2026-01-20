@@ -20,7 +20,7 @@ params:
 
 model:
   graph:
-    inputs: [time, noise, memory_input, discrete_semantic_input]
+    inputs: [expert_id, time, noise, memory_input, discrete_semantic_input]
     modules:
       vfp_moe:
         _type_: vfp_moe
@@ -41,6 +41,7 @@ model:
       - name: decoded_action
         call: module:vfp_moe
         kwargs:
+          expert_id: $expert_id
           time: $time
           noise: $noise
           memory_input: $memory_input

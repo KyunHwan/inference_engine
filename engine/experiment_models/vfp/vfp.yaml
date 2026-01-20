@@ -1,6 +1,6 @@
 algorithm: sequential
 runtime_config_path: engine/algorithms/utils/picknplace.json
-checkpoint_path: engine/experiment_models/vfp/ckpts/exp1/epoch_57
+checkpoint_path: engine/experiment_models/vfp/ckpts/exp1/epoch_104
 
 model:
   component_config_paths:
@@ -26,4 +26,4 @@ policy:
     stats_eps: 1e-6
 plugins:
   - engine.experiment_models.vfp.vfp
-# hz: 20
+hz: 20

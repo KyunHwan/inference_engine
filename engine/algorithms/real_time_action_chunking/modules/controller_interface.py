@@ -142,7 +142,7 @@ def controller_interface(args,
             policy_cfg.params,
             inference_settings,
             camera_names,
-            (image_width, image_height),
+            (image_width // 2, image_height),
         )
 
         # --- ROS2 publishers & executor ---
@@ -198,9 +198,13 @@ def controller_interface(args,
         DT = 1.0 / HZ
         
         # --- Camera setup --- #
-        head_cam = RBRSCamera(device_id1='/dev/head_camera1', device_id2='/dev/head_camera2')
-        left_cam = RBRSCamera(device_id1='/dev/left_camera1', device_id2='/dev/left_camera2')
-        right_cam = RBRSCamera(device_id1='/dev/right_camera1', device_id2='/dev/right_camera2')
+        # head_cam = RBRSCamera(device_id1='/dev/head_camera1', device_id2='/dev/head_camera2')
+        # left_cam = RBRSCamera(device_id1='/dev/left_camera1', device_id2='/dev/left_camera2')
+        # right_cam = RBRSCamera(device_id1='/dev/right_camera1', device_id2='/dev/right_camera2')
+        
+        head_cam = RBRSCamera(device_id1=0, device_id2=None)
+        left_cam = RBRSCamera(device_id1=None, device_id2=6)
+        right_cam = RBRSCamera(device_id1=8, device_id2=None)
 
         cams = {
             'head': head_cam, 
@@ -243,7 +247,7 @@ def controller_interface(args,
                 if cur is not None:
                     cur = cv2.resize(
                         cur,
-                        dsize=(image_width, image_height),
+                        dsize=(image_width // 2, image_height),
                         interpolation=cv2.INTER_AREA,
                     )
                     cur = np.transpose(cur, (2, 0, 1))  # HWC → CHW

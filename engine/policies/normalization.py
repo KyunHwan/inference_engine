@@ -26,11 +26,17 @@ def load_stats(
         stats = pickle.load(f)
     if not isinstance(stats, dict):
         raise ValueError("Normalization stats file must contain a dict")
-
-    sm = _as_tensor(stats, "state_mean", state_dim, device)
-    ss = _as_tensor(stats, "state_std", state_dim, device)
-    am = _as_tensor(stats, "action_mean", action_dim, device)
-    asd = _as_tensor(stats, "action_std", action_dim, device)
+    try:
+        sm = _as_tensor(stats, "state_mean", state_dim, device)
+        ss = _as_tensor(stats, "state_std", state_dim, device)
+        am = _as_tensor(stats, "action_mean", action_dim, device)
+        asd = _as_tensor(stats, "action_std", action_dim, device)
+    except:
+        sm = torch.cat([_as_tensor(stats['observation.state'], "mean", 24, device), _as_tensor(stats['observation.current'], "mean", 24, device)], dim=0)
+        ss = torch.cat([_as_tensor(stats['observation.state'], "std", 24, device), _as_tensor(stats['observation.current'], "std", 24, device)], dim=0)
+        am = _as_tensor(stats['action'], "mean", 24, device)
+        asd = _as_tensor(stats['action'], "std", 24, device)
+        print(sm.shape)
 
     return sm, ss, am, asd, float(stats_eps)
 

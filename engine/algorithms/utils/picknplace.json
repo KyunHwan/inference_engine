@@ -83,7 +83,7 @@
     }
   },
   "inference": {
-    "max_delta": 10.0,
+    "max_delta": 5.0,
     "image_obs_every": 1,
     "sequential": {
       "max_timesteps": 9000,

@@ -39,6 +39,17 @@ INIT_JOINT = np.array(
 ) * np.pi / 180.0
 INIT_TIME  = 0.0
 
+IGRIS_STATE_KEYS = [
+    "/observation/joint_pos/left",
+    "/observation/joint_pos/right",
+    "/observation/hand_joint_pos/left",
+    "/observation/hand_joint_pos/right",
+    "/observation/joint_cur/left",
+    "/observation/joint_cur/right",
+    "/observation/hand_joint_cur/left",
+    "/observation/hand_joint_cur/right",
+]
+
 def signal_handler(signum, frame):
     """Trap SIGINT/SIGTERM for graceful shutdown."""
     print(f"\nReceived signal {signum}. Saving data and shutting down gracefully...")
@@ -64,9 +75,10 @@ def obs_dict_to_np_array(obs_dict: dict[str, np.ndarray], config: ConfigLoader) 
     """
     expected_keys = config.get_observation_keys()
     arrays = []
-    for key in expected_keys:
+    for key in IGRIS_STATE_KEYS:
         field_config = config.get_observation_field_config(key)
         if key in obs_dict and obs_dict[key] is not None:
+
             if key == "/observation/barcode":
                 arrays.append(np.array([1.0 if obs_dict[key] else 0.0], dtype=np.float32))
             elif field_config == "pose.position":
@@ -100,6 +112,7 @@ def spin_thread(executer: SingleThreadedExecutor):
         executer.spin()
     except Exception as e:
         print(f"Error in spin thread: {e}")
+
 
 def main(args, policy: InferencePolicy | None = None):
     # Install signal handlers early
@@ -152,9 +165,12 @@ def main(args, policy: InferencePolicy | None = None):
     thread.start()
 
     # --- Camera setup --- #
-    head_cam = RBRSCamera(device_id1='/dev/head_camera1', device_id2='/dev/head_camera2')
-    left_cam = RBRSCamera(device_id1='/dev/left_camera1', device_id2='/dev/left_camera2')
-    right_cam = RBRSCamera(device_id1='/dev/right_camera1', device_id2='/dev/right_camera2')
+    # head_cam = RBRSCamera(device_id1='/dev/head_camera1', device_id2='/dev/head_camera2')
+    # left_cam = RBRSCamera(device_id1='/dev/left_camera1', device_id2='/dev/left_camera2')
+    # right_cam = RBRSCamera(device_id1='/dev/right_camera1', device_id2='/dev/right_camera2')
+    head_cam = RBRSCamera(device_id1="/dev/head_camera1", device_id2=None)
+    left_cam = RBRSCamera(device_id1=None, device_id2="/dev/left_camera2")
+    right_cam = RBRSCamera(device_id1="/dev/right_camera1", device_id2=None)
 
     cams = {
         'head': head_cam, 
@@ -192,6 +208,7 @@ def main(args, policy: InferencePolicy | None = None):
 
         sm, ss, am, asd, eps = policy.normalization_tensors
         device = sm.device
+        policy = policy.to('cuda')
         policy.eval()
 
         # --- Unpack model I/O dimensions and image cadence ---
@@ -205,7 +222,7 @@ def main(args, policy: InferencePolicy | None = None):
 
         # Per-camera image history buffer: N x C x H x W (uint8)
         image_obs_history = {
-            cam: np.zeros((num_image_obs, 3, image_height, image_width), dtype=np.uint8)
+            cam: np.zeros((num_image_obs, 3, image_height, image_width // 2), dtype=np.uint8)
             for cam in camera_names
         }
         image_frame_counter = 0
@@ -218,11 +235,14 @@ def main(args, policy: InferencePolicy | None = None):
             d = input_recorder.get_dict()
             if all(d.get(k, None) is not None for k in obs_keys):
                 break
+            print("Proprio data not coming in...")
             time.sleep(0.1)
 
         # Deassert stop and optionally publish initial posture (kept commented by design)
         # stop_publisher.publish(Bool(data=False))
         print("Start published")
+
+        
 
         # Build initial robot state vector & bootstrap history with it
         obs_dict = input_recorder.get_observation_dict()
@@ -247,6 +267,10 @@ def main(args, policy: InferencePolicy | None = None):
 
         # --- Motion smoothing setup ---
         prev_joint = INIT_JOINT.copy()
+        joint_msg = JointState()
+        joint_msg.position = prev_joint
+        joint_pub.publish(joint_msg)
+        
         max_delta = np.deg2rad(max_delta_deg)  # convert degrees → radians once
         print(f"max_delta: {max_delta}")
         # Buffer for temporal fusion of overlapping action sequences
@@ -289,7 +313,7 @@ def main(args, policy: InferencePolicy | None = None):
                 sm_rep = sm if sm.numel() == num_robot_obs * state_dim else sm.repeat((num_robot_obs * state_dim + sm.numel() - 1) // sm.numel())[:num_robot_obs * state_dim]
                 ss_rep = ss if ss.numel() == num_robot_obs * state_dim else ss.repeat((num_robot_obs * state_dim + ss.numel() - 1) // ss.numel())[:num_robot_obs * state_dim]
                 rh = (rh - sm_rep.view(num_robot_obs, state_dim)) / (ss_rep.view(num_robot_obs, state_dim) + eps)
-            rh = rh.reshape(1, -1)
+            rh = rh.reshape(1, -1).view(1, policy.num_robot_observations, policy.state_dim)
 
             # Maintain per-camera image history with downscaled frames
             cam_list = []
@@ -299,7 +323,7 @@ def main(args, policy: InferencePolicy | None = None):
                 if cur is not None:
                     cur = cv2.resize(
                         cur,
-                        dsize=(image_width, image_height),
+                        dsize=(image_width // 2, image_height),
                         interpolation=cv2.INTER_AREA,
                     )
                     #if cam_name == 'left' or cam_name == 'right': cv2.imwrite("image", cur)
@@ -337,7 +361,7 @@ def main(args, policy: InferencePolicy | None = None):
                     else nullcontext()
                 )
                 with torch.inference_mode(), autocast_ctx:
-                    new_actions = policy(rh, cam_images, noise=torch.randn(1, num_queries, action_dim))  # shape: (1, num_queries, action_dim)
+                    new_actions = policy(rh, cam_images, noise=torch.randn(1, num_queries, action_dim).to(device))  # shape: (1, num_queries, action_dim)
                     # De-normalize actions
                    
                     am_rep  = am  if am.numel()  == action_dim else am.repeat((action_dim + am.numel() - 1) // am.numel())[:action_dim]

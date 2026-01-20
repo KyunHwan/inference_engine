@@ -1,6 +1,6 @@
 algorithm: sequential
 runtime_config_path: engine/algorithms/utils/picknplace.json
-checkpoint_path: engine/experiment_models/naive_flow_matching/ckpts/exp1
+checkpoint_path: engine/experiment_models/naive_flow_matching/ckpts/exp1/epoch_57
 
 model:
   component_config_paths:
@@ -24,4 +24,4 @@ policy:
     stats_eps: 1e-6
 plugins:
   - engine.experiment_models.naive_flow_matching.naive_flow_matching
-# hz: 20
+hz: 20

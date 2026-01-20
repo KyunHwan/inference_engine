@@ -48,15 +48,15 @@ class VFP(nn.Module):
             depth_head = self.depth_encoder(image=data['observation.images.cam_head'], export_feat_layers=[8, 13, 18, 23])
 
         """ VQVAE Prior """
-        prior_cls_token = self.models['vqvae_prior'](cond_proprio=data['observation.state'],
-                                                     cond_visual=head_image_features,
-                                                     cond_semantic=head_image_semantic,
-                                                     action = None
-                                                     )
+        prior_cls_token = self.prior(cond_proprio=data['observation.state'],
+                                    cond_visual=head_image_features,
+                                    cond_semantic=head_image_semantic,
+                                    action = None
+                                    )
 
         """ Proprio Projection """
         # Assumes that proprio feature dimension will be matched to that of visual
-        conditioning_info = self.models['proprio_projector'](cond_proprio=data['observation.state'],
+        conditioning_info = self.proprio_projector(cond_proprio=data['observation.state'],
                                                             cond_visual=torch.cat([head_image_features,
                                                                                     left_image_features, 
                                                                                     right_image_features],
@@ -64,7 +64,7 @@ class VFP(nn.Module):
         
         """ Gating """
         #gating = self.models['gate'](posterior_cls_token)
-        expert_id = self.models['gate'].inferece(input=prior_cls_token)
+        expert_id = self.gate(input=prior_cls_token, iterations=None, training=False, use_noise=False).argmax(dim=-1).squeeze().item()
         
         batch_size = conditioning_info.shape[0]
         device = conditioning_info.device
@@ -89,7 +89,7 @@ class VFP(nn.Module):
                     if t_batch.shape[0] != batch_size:
                         t_batch = t_batch.expand(batch_size)
                 
-                return self.action_decoder.inference(
+                return self.action_decoder(
                         expert_id=expert_id,
                         time=t_batch,
                         noise=x,
@@ -147,7 +147,7 @@ class VFP(nn.Module):
             depth_head = self.depth_encoder(image=data['observation.images.cam_head'], export_feat_layers=[8, 13, 18, 23])
 
         """ VQVAE Prior """
-        prior_cls_token = self.models['vqvae_prior'](cond_proprio=data['observation.state'],
+        prior_cls_token = self.prior(cond_proprio=data['observation.state'],
                                                      cond_visual=head_image_features,
                                                      cond_semantic=head_image_semantic,
                                                      action = None
@@ -155,7 +155,7 @@ class VFP(nn.Module):
 
         """ Proprio Projection """
         # Assumes that proprio feature dimension will be matched to that of visual
-        conditioning_info = self.models['proprio_projector'](cond_proprio=data['observation.state'],
+        conditioning_info = self.proprio_projector(cond_proprio=data['observation.state'],
                                                             cond_visual=torch.cat([head_image_features,
                                                                                     left_image_features, 
                                                                                     right_image_features],
@@ -163,7 +163,7 @@ class VFP(nn.Module):
         
         """ Gating """
         #gating = self.models['gate'](posterior_cls_token)
-        expert_id = self.models['gate'].inferece(input=prior_cls_token)
+        expert_id = self.gate(input=prior_cls_token, iterations=None, training=False, use_noise=False).argmax(dim=-1).squeeze().item()
         
         return {
             'memory_input': torch.cat([einops.rearrange(depth_head, 'b n h w d -> b (n h w) d'),

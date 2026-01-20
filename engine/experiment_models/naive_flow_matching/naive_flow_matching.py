@@ -49,7 +49,6 @@ class NaiveFlowMatchingPolicy(nn.Module):
 
         """ Proprio Projection """
         # Assumes that proprio feature dimension will be matched to that of visual
-
         conditioning_info = self.proprio_projector(cond_proprio=data['observation.state'],
                                                     cond_visual=torch.cat([head_image_features,
                                                                             left_image_features, 
