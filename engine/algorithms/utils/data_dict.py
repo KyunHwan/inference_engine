@@ -42,16 +42,11 @@ class GenericRecorder(Node):
         
         print(f"robot_id: {self.robot_id}")
         print(f"HZ: {self.HZ}")
-        # self.data["/metadata/system/CPU/usage"] = []
-        # self.data["/metadata/system/CPU/temp"] = []
-        # self.data["/metadata/system/RAM/usage"] = []
-        # self.data["/metadata/system/GPU/usage"] = []
         
         self.timer = self.create_timer(self.DT * 10, self.timer_cb)
 
         # print("=== Subscribing Topics & Fields ===")
         for name, cfg in config["topics"].items():
-            # print(f"Attempting to subscribe to topic: {cfg['topic']}")
             msg_cls = get_msg_class(cfg["msg_type"])
             
             # Initialize data_time and data dictionaries for each field
@@ -65,12 +60,8 @@ class GenericRecorder(Node):
                 lambda msg, n=name, c=cfg: self.cb(n, msg, c),
                 10
             )
-            # print(f"[{name}] topic={cfg['topic']} type={cfg['msg_type']}")
-            # for k, rule in cfg["fields"].items():
-                # print(f"   ↳ {k} ← {rule}")
         
         print(f"Total subscriptions created: {len(config['topics'])}")
-        # print("=== Subscription Complete ===")
         
     def timer_cb(self):
         # Check if the image data is all subscribed

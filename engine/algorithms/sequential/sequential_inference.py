@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-@brief   inference
-@author  MyeongJin Lee (menggu1234@robros.co.kr)
-"""
 
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
@@ -34,7 +30,7 @@ from engine.registry.plugins import load_plugins
 
 # Initial positions (deg → rad), initial finger targets, and initial wait time
 INIT_JOINT = np.array(
-    [+20.0,+30.0,0.0,-120.0,0.0,0.0, -20.0,-30.0,0.0,+120.0,0.0,0.0],
+    [+20.0,+30.0,0.0,-120.0,0.0,0.0,-20.0,-30.0,0.0,+120.0,0.0,0.0],
     dtype=np.float32
 ) * np.pi / 180.0
 INIT_TIME  = 0.0
@@ -114,14 +110,14 @@ def spin_thread(executer: SingleThreadedExecutor):
         print(f"Error in spin thread: {e}")
 
 
-def main(args, policy: InferencePolicy | None = None):
+def main(args):
     # Install signal handlers early
     signal.signal(signal.SIGINT,  signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
     # Let cuDNN search fast kernels dynamically
     torch.backends.cudnn.benchmark = True
-    load_plugins(args.get("plugins", []))
+    #load_plugins(args.get("plugins", [])) # already being done in inference.py
 
     # --- Load runtime config & resolve runtime parameters ---
     config       = ConfigLoader(args["runtime_config_path"])
@@ -156,8 +152,8 @@ def main(args, policy: InferencePolicy | None = None):
                     f"/igris_b/{robot_id}/target_joints", qos_profile=qos)
     finger_pub = input_recorder.create_publisher(Float32MultiArray,
                     f"/igris_b/{robot_id}/finger_target", qos_profile=qos)
-    stop_publisher = input_recorder.create_publisher(Bool,
-                    f"/igris_b/{robot_id}/stop", qos_profile=qos)
+    # stop_publisher = input_recorder.create_publisher(Bool,
+    #                 f"/igris_b/{robot_id}/stop", qos_profile=qos)
 
     executor = SingleThreadedExecutor()
     executor.add_node(input_recorder)
@@ -165,9 +161,6 @@ def main(args, policy: InferencePolicy | None = None):
     thread.start()
 
     # --- Camera setup --- #
-    # head_cam = RBRSCamera(device_id1='/dev/head_camera1', device_id2='/dev/head_camera2')
-    # left_cam = RBRSCamera(device_id1='/dev/left_camera1', device_id2='/dev/left_camera2')
-    # right_cam = RBRSCamera(device_id1='/dev/right_camera1', device_id2='/dev/right_camera2')
     head_cam = RBRSCamera(device_id1="/dev/head_camera1", device_id2=None)
     left_cam = RBRSCamera(device_id1=None, device_id2="/dev/left_camera2")
     right_cam = RBRSCamera(device_id1="/dev/right_camera1", device_id2=None)
@@ -190,26 +183,23 @@ def main(args, policy: InferencePolicy | None = None):
         torch.set_grad_enabled(False)
         torch.set_float32_matmul_precision("high")
 
-        if policy is None:
-            model_cfg = ModelConfig.model_validate(args["model"])
-            policy_cfg = PolicyConfig.model_validate(args["policy"])
-            policy = build_policy(
-                model_cfg,
-                policy_cfg,
-                args["checkpoint_path"],
-                device="cuda" if torch.cuda.is_available() else "cpu",
-            )
-            print("Loaded policy via policy builder")
-        else:
-            print("Using preloaded policy")
+        model_cfg = ModelConfig.model_validate(args["model"])
+        policy_cfg = PolicyConfig.model_validate(args["policy"])
+        policy = build_policy(
+            model_cfg,
+            policy_cfg,
+            args["checkpoint_path"],
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        policy.eval()
+        print("Loaded policy via policy builder")
 
         if set(camera_names) != set(policy.camera_names):
             raise ValueError("Runtime camera_names does not match policy camera_names")
 
         sm, ss, am, asd, eps = policy.normalization_tensors
         device = sm.device
-        policy = policy.to('cuda')
-        policy.eval()
+        
 
         # --- Unpack model I/O dimensions and image cadence ---
         state_dim      = policy.state_dim
