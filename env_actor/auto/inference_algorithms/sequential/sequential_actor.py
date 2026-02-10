@@ -110,7 +110,7 @@ class SequentialActor:
                     # Run policy forward pass (just neural network)
                     policy_output = self.policy.predict(normalized_obs)
 
-                    # Buffer and denormalize action in data manager
+                    # Denormalize and buffer action in data manager
                     self.data_manager_interface.buffer_action_chunk(policy_output, t)
 
                 # d. Get current action from data manager (already denormalized)

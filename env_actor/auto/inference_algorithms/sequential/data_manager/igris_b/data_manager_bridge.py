@@ -29,7 +29,7 @@ class DataManagerBridge:
 
         # Extract dimensions from stats and config
         # Dimensions should be loaded from stats file if available, else from config
-        if 'dimensions' in self.norm_stats:
+        if self.norm_stats is not None and 'dimensions' in self.norm_stats:
             dims = self.norm_stats['dimensions']
             self.num_robot_obs = dims.get('num_robot_obs', self.runtime_params.proprio_history_size)
             self.num_image_obs = dims.get('num_image_obs', self.runtime_params.num_img_obs)
@@ -266,6 +266,20 @@ class DataManagerBridge:
             raw_obs[cam] = self.img_obs_history[cam]
 
         return raw_obs
+
+    def openpi_buffer_denormalized_action_chunk(self, policy_output: np.array, current_step: int):
+        """
+        Denormalize and buffer action chunk from policy.
+
+        Args:
+            policy_output: Normalized actions from policy (1, num_queries, action_dim)
+            current_step: Current timestep
+            device: Device for tensor operations
+        """
+
+        # Store as numpy array: (num_queries, action_dim)
+        self.last_action_chunk = policy_output.squeeze(0) if policy_output.ndim == 3 else policy_output
+        self.last_policy_step = current_step
     
     def serve_init_action(self,):
         """ Serve init action for RTC Guided Inference """

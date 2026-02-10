@@ -2,9 +2,9 @@ class DataManagerInterface:
     def __init__(self, runtime_params, robot):
         self.data_manager_bridge = None
         if robot == "igris_b":
-            import env_actor.auto.data_manager.igris_b.data_manager_bridge as DataManagerBridge
+            import igris_b.data_manager_bridge as DataManagerBridge
         elif robot == "igris_c":
-            import env_actor.auto.data_manager.igris_c.data_manager_bridge as DataManagerBridge
+            import igris_c.data_manager_bridge as DataManagerBridge
         self.data_manager_bridge = DataManagerBridge(runtime_params=runtime_params)
 
     @property
@@ -48,6 +48,9 @@ class DataManagerInterface:
             Dict with 'robot_obs_history' and 'cam_images' numpy arrays
         """
         return self.data_manager_bridge.get_raw_obs_arrays()
+
+    def openpi_buffer_denormalized_action_chunk(self, policy_output, current_step):
+        self.data_manager_bridge.openpi_buffer_denormalized_action_chunk(policy_output, current_step)
 
     def serve_init_action(self):
         return self.data_manager_bridge.serve_init_action()
