@@ -14,19 +14,16 @@ Key responsibilities:
 """
 from __future__ import annotations
 
+import ray
+import numpy as np
 import time
+
 from multiprocessing.synchronize import Condition as ConditionType
 from multiprocessing.synchronize import Event as EventType
 from multiprocessing.synchronize import RLock as RLockType
 from typing import Any
 
-import ray
-import numpy as np
 
-
-from env_actor.auto.io_interface.controller_interface import ControllerInterface
-
-from .data_manager.shm_manager_interface import SharedMemoryInterface
 from .data_manager.utils.utils import ShmArraySpec
 
 @ray.remote
@@ -60,6 +57,7 @@ class ControllerActor:
         inference_ready_flag: Shared Value for inference ready signal
     """
 
+
     def __init__(
         self,
         runtime_params,
@@ -74,6 +72,9 @@ class ControllerActor:
         num_control_iters: Any,  # multiprocessing.Value
         inference_ready_flag: Any,  # multiprocessing.Value
     ):
+        from env_actor.auto.io_interface.controller_interface import ControllerInterface
+        from .data_manager.shm_manager_interface import SharedMemoryInterface
+
         """Initialize the controller actor."""
         # Initialize interfaces
         self.runtime_params = runtime_params

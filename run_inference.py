@@ -19,8 +19,7 @@ def start_online_rl(policy_yaml_path, robot, inference_runtime_params_config, in
     # Initialize Ray
     if ray.is_initialized():
         ray.shutdown()
-    ray.init(runtime_env={"working_dir": os.getcwd()},
-             namespace="online_rl")
+    ray.init(address="auto", namespace="online_rl")
     
     # Environment Actor
     # RTC (Real-Time Action Chunking)

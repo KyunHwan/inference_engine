@@ -11,11 +11,6 @@ import torch
 import numpy as np
 import ray
 
-from env_actor.auto.io_interface.controller_interface import ControllerInterface
-from .data_manager.data_manager_interface import DataManagerInterface
-from env_actor.policy.policies.pi05_igris.pi05_igris import Pi05IgrisVlaAdapter
-
-
 @ray.remote(num_gpus=1)
 class SequentialActorOpenpi:
     """Sequential inference loop using pi05_igris (openpi) policy.
@@ -45,6 +40,10 @@ class SequentialActorOpenpi:
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        from env_actor.auto.io_interface.controller_interface import ControllerInterface
+        from .data_manager.data_manager_interface import DataManagerInterface
+        from env_actor.policy.policies.pi05_igris.pi05_igris import Pi05IgrisVlaAdapter
+        
         # Create pi05_igris via vla_'s factory (NOT build_policy)
         self.policy = Pi05IgrisVlaAdapter(
             ckpt_dir=ckpt_dir,

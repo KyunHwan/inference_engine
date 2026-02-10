@@ -28,7 +28,7 @@ def start_openpi_inference(
     # Initialize Ray
     if ray.is_initialized():
         ray.shutdown()
-    ray.init(runtime_env={"working_dir": os.getcwd()}, namespace="online_rl")
+    ray.init(address="auto", namespace="online_rl")
 
     # Load robot-specific RuntimeParams
     if robot == "igris_b":

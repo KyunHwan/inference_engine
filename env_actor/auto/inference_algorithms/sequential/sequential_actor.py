@@ -10,9 +10,7 @@ import torch
 import numpy as np
 import ray
 
-from env_actor.auto.io_interface.controller_interface import ControllerInterface
-from .data_manager.data_manager_interface import DataManagerInterface
-from env_actor.policy.utils.loader import build_policy
+
 
 @ray.remote(num_gpus=1)
 class SequentialActor:
@@ -48,6 +46,10 @@ class SequentialActor:
             robot: str ("igris_b" or "igris_c")
             policy_yaml_path: str file path to policy yaml file.
         """
+        from env_actor.auto.io_interface.controller_interface import ControllerInterface
+        from .data_manager.data_manager_interface import DataManagerInterface
+        from env_actor.policy.utils.loader import build_policy
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.policy = build_policy(policy_yaml_path=policy_yaml_path, map_location=self.device)
         self.controller_interface = ControllerInterface(runtime_params=runtime_params, 

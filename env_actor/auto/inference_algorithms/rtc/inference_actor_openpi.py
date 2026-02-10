@@ -20,13 +20,38 @@ from typing import Any
 
 import numpy as np
 import torch
+import math
 
-from env_actor.policy.utils.loader import build_policy
-
-from .inference_engine_utils.action_inpainting import guided_action_chunk_inference
-from .data_manager.shm_manager_interface import SharedMemoryInterface
 from .data_manager.utils.utils import ShmArraySpec
-from .data_manager.data_normalization_interface import DataNormalizationInterface
+
+def _compute_guided_prefix_weights(
+    delay_steps: int,
+    executed_steps: int,
+    total: int,
+    *,
+    schedule: str = "exp",
+) -> np.ndarray:
+    """Guided-inference prefix weighting for blending neighboring action chunks."""
+    start = max(min(int(delay_steps), total), 0)
+    if start >= total:
+        return np.ones(total, dtype=np.float32)
+    span = max(int(executed_steps), 1)
+    #span = min(span, max(total - start, 1))
+    
+    indices = np.arange(total, dtype=np.float32)
+    if schedule == "ones":
+        return np.ones(total, dtype=np.float32)
+    if schedule == "zeros":
+        return (indices < start).astype(np.float32)
+    weights = np.zeros(total, dtype=np.float32)
+    weights[:start] = 1.0
+    denom = total - span - start + 1
+    if denom > 0 and (total - span) > start:
+        c_i = (total - span - indices) / float(denom)
+        inter_vals = c_i * np.expm1(c_i) / (math.e - 1.0)
+        weights[start : total - span] = inter_vals[start : total - span]
+    weights[total - span :] = 0.0
+    return weights
 
 @ray.remote(num_gpus=1)
 class InferenceActor:
@@ -53,10 +78,10 @@ class InferenceActor:
         inference_ready_flag: Shared Value for inference ready signal
     """
 
+    
     def __init__(
         self,
         runtime_params,
-        policy_yaml_path: str,
         shm_specs: dict[str: ShmArraySpec],
         lock: RLockType,
         control_iter_cond: ConditionType,
@@ -65,7 +90,13 @@ class InferenceActor:
         episode_complete_event: EventType,
         num_control_iters: Any,  # multiprocessing.Value
         inference_ready_flag: Any,  # multiprocessing.Value
+        ckpt_dir,
+        default_prompt=None,
     ):
+        from .data_manager.data_normalization_interface import DataNormalizationInterface
+        from .data_manager.shm_manager_interface import SharedMemoryInterface
+        from env_actor.policy.policies.pi05_igris.pi05_igris import Pi05IgrisVlaAdapter
+
         self.runtime_params = runtime_params
 
         """Initialize the inference actor."""
@@ -75,14 +106,14 @@ class InferenceActor:
         torch.set_float32_matmul_precision("high")
 
         # Build policy using env_actor loader
-        self.policy = build_policy(
-            policy_yaml_path=policy_yaml_path,
-            map_location=self.device,
+        # Create pi05_igris via vla_'s factory (NOT build_policy)
+        self.policy = Pi05IgrisVlaAdapter(
+            ckpt_dir=ckpt_dir,
+            device=str(self.device),
+            default_prompt=default_prompt,
         )
 
-        # Freeze all parameters (required for VJP in guided inference)
         self.policy.eval()
-        self.policy.freeze_all_model_params()
 
         # Create SharedMemoryManager from specs (attaches to existing SharedMemory)
         self.shm_manager = SharedMemoryInterface.attach_from_specs(
@@ -99,7 +130,7 @@ class InferenceActor:
         self.data_normalization_bridge = DataNormalizationInterface(self.runtime_params.read_stats_file())
 
         # Control parameters
-        self.min_num_actions_executed = 15
+        self.min_num_actions_executed = 30
         
     def start(self) -> None:
         """Main inference loop - runs until explicitly stopped.
@@ -166,12 +197,22 @@ class InferenceActor:
                 print(f"Inference triggered: {input_data['num_control_iters']} actions executed")
 
                 # Normalize observations and prev_action_chunk
-                normalized_input_data = self.data_normalization_bridge.normalize_state_action(input_data)
+                # normalized_input_data = self.data_normalization_bridge.normalize_state_action(input_data)
 
-                pred_actions = self.policy.guided_inference(normalized_input_data)
+                pred_actions = self.policy.predict(obs=input_data, noise=None)
 
+                # blend_steps = max(1, min(input_data['est_delay'], 
+                #                          self.min_num_actions_executed - input_data['est_delay']))
+                weights = _compute_guided_prefix_weights(
+                    input_data['est_delay'],
+                    input_data['num_control_iters'],
+                    pred_actions.shape[0],
+                    schedule="exp",
+                ).reshape(-1, 1)
+                next_actions = input_data['prev_action'] * weights + pred_actions * (1.0 - weights)
+                
                 # Denormalize and write new action chunk
-                denormalized_actions = self.data_normalization_bridge.denormalize_action(pred_actions)
+                # denormalized_actions = self.data_normalization_bridge.denormalize_action(pred_actions)
                 self.shm_manager.write_action_chunk_n_update_iter_val(
-                    denormalized_actions, normalized_input_data['num_control_iters']
+                    next_actions, input_data['num_control_iters']
                 )
