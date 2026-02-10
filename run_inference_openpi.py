@@ -58,6 +58,7 @@ def start_openpi_inference(
         ckpt_dir=ckpt_dir,
         default_prompt=default_prompt,
     )
+    print(ray.get(env_actor.__ray_ready__.remote()))
     env_actor.start.remote()
 
     # Block until Ray shuts down

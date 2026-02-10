@@ -16,3 +16,14 @@ uv pip install beartype
 uv pip install jaxtyping==0.2.34
 uv pip install cloudpickle
 uv pip install "ray[default]"
+uv pip install sentencepiece
+uv pip install chex
+uv pip install tqdm-loggable
+uv pip install numpydantic
+uv pip install --no-deps lerobot
+uv pip install datasets
+uv pip install accelerate
+uv pip install av
+uv pip install tyro
+uv pip install ml_collections
+uv pip install gcsfs
