@@ -146,12 +146,12 @@ def _tiny_paligemma_init(self, vlm_config, action_expert_config, use_adarms=None
         self.enable_vision_film(vlm_config.width)
 
 
-def _create_model(dtype="float32"):
+def _create_model(dtype="bfloat16"):
     """Instantiate a tiny PI0Pytorch model with random weights on GPU.
 
     Note: The dummy variant uses very small dimensions (width=64, head_dim=16)
     which can trigger cuBLAS errors with bfloat16 on some GPUs. We default to
-    float32 for reliability. For full-size models, bfloat16 works fine.
+    bfloat16 for reliability. For full-size models, bfloat16 works fine.
     """
     from openpi.models.pi0_config import Pi0Config
     from openpi.models_pytorch.gemma_pytorch import PaliGemmaWithExpertModel
