@@ -32,6 +32,33 @@ def _resolve_component_paths(
             resolved[name] = os.path.abspath(os.path.join(base_dir, rel_path))
     return resolved
 
+def build_policy_components(policy_yaml_path: str,
+    *,
+    map_location: str | torch.device | None = "cpu",):
+    """Build a policy from a YAML config path."""
+    config = load_policy_config(policy_yaml_path)
+
+    model_cfg = config.get("model", {})
+    component_paths = model_cfg.get("component_config_paths", {})
+    if not isinstance(component_paths, dict) or not component_paths:
+        raise ValueError("model.component_config_paths must be a non-empty mapping")
+
+    resolved_paths = _resolve_component_paths(
+        component_paths, policy_yaml_path=policy_yaml_path
+    )
+
+    factory = PolicyConstructorModelFactory()
+    components = factory.build(resolved_paths)
+    if not isinstance(components, dict):
+        components = {"main": components}
+
+    checkpoint_path = config.get("checkpoint_path")
+    if checkpoint_path:
+        for name, module in components.items():
+            ckpt_path = os.path.join(checkpoint_path, f"{name}.pt")
+            state = torch.load(ckpt_path, map_location=map_location)
+            module.load_state_dict(state)
+    return components
 
 def build_policy(
     policy_yaml_path: str,

@@ -10,3 +10,8 @@ uv pip install einops
 uv pip install timm
 uv pip install transformers==4.53.2
 uv pip install pytest
+uv pip install flax
+uv pip install augmax
+uv pip install beartype
+uv pip install jaxtyping==0.2.34
+uv pip install "ray[default]"

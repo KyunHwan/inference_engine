@@ -15,6 +15,7 @@ import argparse
 
 import ray
 import torch
+import json
 
 
 def start_openpi_inference(
@@ -37,6 +38,9 @@ def start_openpi_inference(
     else:
         raise ValueError(f"Unknown robot: {robot}")
 
+    if isinstance(inference_runtime_params_config, str):
+        with open(inference_runtime_params_config, 'r') as f:
+            inference_runtime_params_config = json.load(f)
     runtime_params = RuntimeParams(inference_runtime_params_config)
 
     # Import and create openpi sequential actor
@@ -44,6 +48,9 @@ def start_openpi_inference(
         SequentialActorOpenpi,
     )
 
+    if isinstance(inference_runtime_topics_config, str):
+        with open(inference_runtime_topics_config, 'r') as f:
+            inference_runtime_topics_config = json.load(f)
     env_actor = SequentialActorOpenpi.remote(
         runtime_params=runtime_params,
         inference_runtime_topics_config=inference_runtime_topics_config,
@@ -72,7 +79,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run pi05_igris (openpi) inference")
     parser.add_argument(
-        "--ckpt_dir", "-C", type=str, required=True,
+        "--ckpt_dir", "-C", type=str,
         default="/home/robros/Projects/robros_vla_inference_engine/openpi_orig/checkpoints/pi05_igris/pi05_igrig_b_pnp_v3.3.3/15000",
         help="Path to OpenPI checkpoint step directory (contains model.safetensors + assets/)",
     )
@@ -93,7 +100,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     start_openpi_inference(
-        ckpt_dir=os.path.abspath(args.ckpt_dir),
+        ckpt_dir=args.ckpt_dir,
         robot=args.robot,
         inference_runtime_params_config=args.inference_runtime_params_config,
         inference_runtime_topics_config=args.inference_runtime_topics_config,
