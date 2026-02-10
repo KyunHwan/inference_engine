@@ -8,5 +8,5 @@ uv pip install geomloss
 uv pip install numpy
 uv pip install einops
 uv pip install timm
-uv pip install transformer==4.53.2
+uv pip install transformers==4.53.2
 uv pip install pytest
