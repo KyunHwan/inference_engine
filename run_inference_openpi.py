@@ -85,15 +85,17 @@ if __name__ == "__main__":
     )
     parser.add_argument("--robot", required=True, choices=["igris_b", "igris_c"])
     parser.add_argument(
-        "--inference_runtime_params_config", required=True,
+        "--inference_runtime_params_config", 
+        default="./env_actor/runtime_settings_configs/igris_b/inference_runtime_params.json",
         help="Path to inference runtime params JSON config",
     )
     parser.add_argument(
-        "--inference_runtime_topics_config", required=True,
+        "--inference_runtime_topics_config", 
+        default="./env_actor/runtime_settings_configs/igris_b/inference_runtime_topics.json",
         help="Path to inference runtime topics config",
     )
     parser.add_argument(
-        "--default_prompt", type=str, required=True,
+        "--default_prompt", type=str,
         default="Pick up objects on the table and place them into the box.",
         help="Default language prompt for the policy (e.g., 'pick and place')",
     )
