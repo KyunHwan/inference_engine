@@ -51,13 +51,15 @@ def start_openpi_inference(
     if isinstance(inference_runtime_topics_config, str):
         with open(inference_runtime_topics_config, 'r') as f:
             inference_runtime_topics_config = json.load(f)
-    env_actor = SequentialActorOpenpi.remote(
-        runtime_params=runtime_params,
-        inference_runtime_topics_config=inference_runtime_topics_config,
-        robot=robot,
-        ckpt_dir=ckpt_dir,
-        default_prompt=default_prompt,
-    )
+    env_actor = SequentialActorOpenpi.\
+                    options(resources={"worker": 1}).\
+                    remote(
+                        runtime_params=runtime_params,
+                        inference_runtime_topics_config=inference_runtime_topics_config,
+                        robot=robot,
+                        ckpt_dir=ckpt_dir,
+                        default_prompt=default_prompt,
+                    )
     print(ray.get(env_actor.__ray_ready__.remote()))
     env_actor.start.remote()
 
