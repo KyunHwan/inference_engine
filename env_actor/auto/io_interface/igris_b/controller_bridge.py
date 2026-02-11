@@ -30,6 +30,7 @@ class ControllerBridge:
                  inference_runtime_topics_config,):
         self.runtime_params = runtime_params
 
+        rclpy.init()
         self.input_recorder = GenericRecorder(inference_runtime_topics_config)
         self.qos = QoSProfile(depth=10)
         self.qos.reliability = QoSReliabilityPolicy.RELIABLE
