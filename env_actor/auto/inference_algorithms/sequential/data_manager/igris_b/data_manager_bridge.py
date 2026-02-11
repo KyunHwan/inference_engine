@@ -52,7 +52,7 @@ class DataManagerBridge:
         self.img_obs_history = None
         self.robot_proprio_history = None
         self.image_frame_counter = 0
-        self.prev_joint = None
+        self._prev_joint = None
 
         # Action buffering for sequential inference
         self.last_action_chunk = None  # Last policy output (denormalized)
@@ -60,7 +60,7 @@ class DataManagerBridge:
 
     @property
     def prev_joint(self):
-        return self.prev_joint
+        return self._prev_joint
     
     def denormalize_action(self, action: torch.Tensor) -> np.ndarray:
         """
