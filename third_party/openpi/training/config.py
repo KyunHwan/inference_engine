@@ -867,7 +867,7 @@ _CONFIGS = [
             action_horizon=50,
             discrete_state_input=False,
             # use_action_film=True,
-            use_vision_film=False,
+            use_vision_film=True,
         ),
         data=LeRobotIgrisDataConfig(
             repo_id="joon001001/igris-b-pnp_v3.3.2",

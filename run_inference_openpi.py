@@ -83,7 +83,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run pi05_igris (openpi) inference")
     parser.add_argument(
         "--ckpt_dir", "-C", type=str,
-        default="/home/robros/Projects/robros_vla_inference_engine/openpi_orig/checkpoints/pi05_igris/pi05_igrig_b_pnp_v3.3.3/15000",
+        default="/home/robros/Projects/robros_vla_inference_engine/openpi_film/checkpoints/pi05_igris/pi05_igris_b_pnp_v3.3.3/cut_15000",
         help="Path to OpenPI checkpoint step directory (contains model.safetensors + assets/)",
     )
     parser.add_argument("--robot", required=True, choices=["igris_b", "igris_c"])
