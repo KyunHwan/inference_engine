@@ -19,7 +19,6 @@ from multiprocessing.synchronize import RLock as RLockType
 from typing import Any
 
 import numpy as np
-import torch
 import math
 
 from .data_manager.utils.utils import ShmArraySpec
@@ -93,6 +92,7 @@ class InferenceActor:
         ckpt_dir,
         default_prompt=None,
     ):
+        import torch
         from .data_manager.data_normalization_interface import DataNormalizationInterface
         from .data_manager.shm_manager_interface import SharedMemoryInterface
         from env_actor.policy.policies.pi05_igris.pi05_igris import Pi05IgrisVlaAdapter
@@ -151,6 +151,7 @@ class InferenceActor:
             self.shm_manager.cleanup()
 
     def _async_start(self) -> None:
+        import torch
         """Main inference loop implementation.
 
         Note: Changed from async to sync since SharedMemoryManager uses
