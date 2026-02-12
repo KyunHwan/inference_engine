@@ -109,7 +109,6 @@ def start_control(
 
                 # a. Read latest observations
                 obs_data = controller_interface.read_state()
-                print("Read a state...")
                 if "proprio" not in obs_data:
                     print(f"Warning: No proprio data at step {t}, skipping...")
                     continue
@@ -128,6 +127,7 @@ def start_control(
                 next_t += controller_interface.DT
                 sleep_time = next_t - time.perf_counter()
                 if sleep_time > 0.0:
+                    print("sleeping...")
                     time.sleep(sleep_time)
 
             print(f"Episode {episode} finished!")
