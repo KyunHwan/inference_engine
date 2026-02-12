@@ -53,7 +53,7 @@ def _compute_guided_prefix_weights(
     return weights
 
 @ray.remote(num_gpus=1)
-class InferenceActor:
+class InferenceActorOpenpi:
     """GPU-resident inference actor for RTC algorithm.
 
     Runs the guided action chunk inference loop, coordinating with:

@@ -61,7 +61,7 @@ def start_openpi_inference(
 
     if ALGORITHM == 'rtc':
         from env_actor.auto.inference_algorithms.rtc.control_actor import ControllerActor as RTCControllerActor
-        from env_actor.auto.inference_algorithms.rtc.inference_actor import InferenceActor as RTCInferenceActor
+        from env_actor.auto.inference_algorithms.rtc.inference_actor_openpi import InferenceActorOpenpi as RTCInferenceActorOpenpi
         from env_actor.auto.inference_algorithms.rtc.data_manager.utils.utils import create_shared_ndarray
 
 
@@ -100,7 +100,7 @@ def start_openpi_inference(
         inference_ready_flag = Value(c_bool, False, lock=False)
 
         # Create inference actor (GPU-resident) with SharedMemory specs
-        inference_engine = RTCInferenceActor.\
+        inference_engine = RTCInferenceActorOpenpi.\
                         options(resources={"inference_pc": 1}).\
                         remote(
                             runtime_params=runtime_params,
