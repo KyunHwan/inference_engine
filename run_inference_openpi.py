@@ -21,7 +21,7 @@ from ctypes import c_bool
 from multiprocessing import Condition, Event, RLock, Value
 import numpy as np
 
-ALGORITHM = 'rtc'
+ALGORITHM = 'sequential'
 
 robot_obs_history_dtype = np.float32
 cam_images_dtype = np.uint8
