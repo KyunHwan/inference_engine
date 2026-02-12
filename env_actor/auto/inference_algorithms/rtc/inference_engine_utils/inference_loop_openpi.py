@@ -150,12 +150,12 @@ def start_inference(
                 with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     pred_actions = policy.predict(obs=input_data, noise=None)
 
-                # blend_steps = max(1, min(input_data['est_delay'], 
-                #                          self.min_num_actions_executed - input_data['est_delay']))
+                blend_steps = max(1, min(input_data['est_delay'], 
+                                         min_num_actions_executed - input_data['est_delay']))
                 weights = _compute_guided_prefix_weights(
                     input_data['est_delay'],
-                    input_data['num_control_iters'],
-                    pred_actions.shape[0],
+                    blend_steps, # executed steps
+                    pred_actions.shape[0], # total
                     schedule="exp",
                 ).reshape(-1, 1)
                 next_actions = input_data['prev_action'] * weights + pred_actions * (1.0 - weights)

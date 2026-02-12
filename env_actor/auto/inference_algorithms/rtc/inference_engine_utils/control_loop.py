@@ -127,7 +127,6 @@ def start_control(
                 next_t += controller_interface.DT
                 sleep_time = next_t - time.perf_counter()
                 if sleep_time > 0.0:
-                    print("sleeping...")
                     time.sleep(sleep_time)
 
             print(f"Episode {episode} finished!")
