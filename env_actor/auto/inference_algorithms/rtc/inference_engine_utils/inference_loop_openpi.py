@@ -166,4 +166,5 @@ def start_inference(
                     next_actions, input_data['num_control_iters']
                 )
     finally:
-        shm_manager.cleanup()
+        if 'shm_manager' in locals():
+            shm_manager.cleanup()

@@ -133,4 +133,5 @@ def start_control(
             print(f"Episode {episode} finished!")
             shm_manager.signal_episode_complete()
     finally:
-        shm_manager.cleanup()
+        if 'shm_manager' in locals():
+            shm_manager.cleanup()

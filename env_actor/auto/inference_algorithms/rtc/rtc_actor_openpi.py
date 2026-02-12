@@ -21,7 +21,7 @@ class RTCActorOpenpi:
         self.inference_runtime_topics_config = inference_runtime_topics_config
         self.min_num_actions_executed = min_num_actions_executed
 
-        self.ckpt_dir = ckpt_dir,
+        self.ckpt_dir = ckpt_dir
         self.default_prompt = default_prompt
     
     def start(self):
