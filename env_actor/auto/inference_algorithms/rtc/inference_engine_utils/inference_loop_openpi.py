@@ -108,7 +108,7 @@ def start_inference(
             inference_ready_flag=inference_ready_flag,
         )
 
-        data_normalization_bridge = DataNormalizationInterface(runtime_params.read_stats_file())
+        data_normalization_bridge = DataNormalizationInterface(robot=robot, data_stats=runtime_params.read_stats_file())
 
         # # Warm up CUDA (once, outside all loops)
         # print("Warming up CUDA kernels...")
