@@ -97,6 +97,7 @@ def start_inference(
 
         # Create SharedMemoryManager from specs (attaches to existing SharedMemory)
         shm_manager = SharedMemoryInterface.attach_from_specs(
+            robot=robot,
             shm_specs=shm_specs,
             lock=lock,
             control_iter_cond=control_iter_cond,
