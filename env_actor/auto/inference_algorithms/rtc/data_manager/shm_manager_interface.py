@@ -1,3 +1,6 @@
+
+from __future__ import annotations
+
 from env_actor.auto.inference_algorithms.rtc.data_manager.utils.utils import ShmArraySpec
 from typing import TYPE_CHECKING
 from multiprocessing.shared_memory import SharedMemory
@@ -8,7 +11,6 @@ import numpy as np
 from multiprocessing.synchronize import Condition as ConditionType
 from multiprocessing.synchronize import Event as EventType
 from multiprocessing.synchronize import RLock as RLockType
-
 
 
 class SharedMemoryInterface:
