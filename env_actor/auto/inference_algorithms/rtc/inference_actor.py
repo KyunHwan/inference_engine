@@ -19,7 +19,7 @@ from multiprocessing.synchronize import RLock as RLockType
 from typing import Any
 
 import numpy as np
-import torch
+
 
 from env_actor.policy.utils.loader import build_policy
 
@@ -66,6 +66,7 @@ class InferenceActor:
         num_control_iters: Any,  # multiprocessing.Value
         inference_ready_flag: Any,  # multiprocessing.Value
     ):
+        import torch
         self.runtime_params = runtime_params
 
         """Initialize the inference actor."""
@@ -120,6 +121,7 @@ class InferenceActor:
             self.shm_manager.cleanup()
 
     def _async_start(self) -> None:
+        import torch
         """Main inference loop implementation.
 
         Note: Changed from async to sync since SharedMemoryManager uses
