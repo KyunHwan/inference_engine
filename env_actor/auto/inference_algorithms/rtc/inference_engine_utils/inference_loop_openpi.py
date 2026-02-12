@@ -108,18 +108,16 @@ def start_inference(
 
         data_normalization_bridge = DataNormalizationInterface(runtime_params.read_stats_file())
 
-        min_num_actions_executed = 30
+        # # Warm up CUDA (once, outside all loops)
+        # print("Warming up CUDA kernels...")
+        # with torch.no_grad():
+        #     # Warmup encode_memory
+        #     try:
+        #         policy.warmup()
+        #     except Exception as e:
+        #         print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
 
-        # Warm up CUDA (once, outside all loops)
-        print("Warming up CUDA kernels...")
-        with torch.no_grad():
-            # Warmup encode_memory
-            try:
-                policy.warmup()
-            except Exception as e:
-                print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
-
-        print("Starting inference loop...")
+        # print("Starting inference loop...")
 
         while True:  # Outer loop - per episode
             print("Signaling inference ready...")
@@ -147,8 +145,8 @@ def start_inference(
 
                 # Normalize observations and prev_action_chunk
                 # normalized_input_data = self.data_normalization_bridge.normalize_state_action(input_data)
-
-                pred_actions = policy.predict(obs=input_data, noise=None)
+                with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    pred_actions = policy.predict(obs=input_data, noise=None)
 
                 # blend_steps = max(1, min(input_data['est_delay'], 
                 #                          self.min_num_actions_executed - input_data['est_delay']))

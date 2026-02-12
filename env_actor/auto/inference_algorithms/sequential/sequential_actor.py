@@ -110,7 +110,8 @@ class SequentialActor:
                     normalized_obs['noise'] = noise
 
                     # Run policy forward pass (just neural network)
-                    policy_output = self.policy.predict(normalized_obs)
+                    with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                        policy_output = self.policy.predict(normalized_obs)
 
                     # Denormalize and buffer action in data manager
                     self.data_manager_interface.buffer_action_chunk(policy_output, t)
