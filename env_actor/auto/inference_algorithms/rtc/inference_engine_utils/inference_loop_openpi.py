@@ -87,6 +87,7 @@ def start_inference(
         - Outer loop handles per-episode transitions
         - Inner loop handles inference iterations within an episode
         """
+        print("model ready!")
         policy = Pi05IgrisVlaAdapter(
                 ckpt_dir=ckpt_dir,
                 device=str(device),
