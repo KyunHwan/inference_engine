@@ -123,7 +123,7 @@ class ControllerActor:
 
         print("Starting state readers...")
         self.controller_interface.start_state_readers()
-
+        rate_controller = self.controller_interface.recorder_rate_controller()
         print("Starting control loop...")
         episode = -1
 
@@ -158,6 +158,7 @@ class ControllerActor:
             next_t = time.perf_counter()
 
             for t in range(self.episode_length):
+                rate_controller.sleep()
                 # Check stop event
                 if self.shm_manager.stop_event_is_set():
                     print("Stop event received during episode, exiting")

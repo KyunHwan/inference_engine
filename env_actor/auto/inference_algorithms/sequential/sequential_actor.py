@@ -66,7 +66,7 @@ class SequentialActor:
         # rate controller should probably be replaced with using DT since we don't know if it will be used in Igris-C control.
         # rate_controller = self.controller_interface.recorder_rate_controller()
         DT = self.controller_interface.DT
-        
+        rate_controller = self.controller_interface.recorder_rate_controller()
         episode = -1
 
         while True:
@@ -85,6 +85,7 @@ class SequentialActor:
 
             # 5. Main control loop
             for t in range(9000):
+                rate_controller.sleep()
                 # Rate-limit to maintain target HZ
                 # rate_controller.sleep()
 

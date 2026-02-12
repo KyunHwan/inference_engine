@@ -68,6 +68,7 @@ class SequentialActorOpenpi:
         print("Starting state readers...")
         self.controller_interface.start_state_readers()
 
+        rate_controller = self.controller_interface.recorder_rate_controller()
         DT = self.controller_interface.DT
         episode = -1
 
@@ -86,6 +87,7 @@ class SequentialActorOpenpi:
 
             # Main control loop
             for t in range(9000):
+                rate_controller.sleep()
                 # a. Read latest observations (raw from robot)
                 obs_data = self.controller_interface.read_state()
 
