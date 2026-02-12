@@ -82,11 +82,12 @@ class SequentialActorOpenpi:
             print("Bootstrapping observation history...")
             initial_state = self.controller_interface.read_state()
             self.data_manager_interface.init_inference_obs_state_buffer(initial_state)
-
+            print("Data manager interface is ready...")
             next_t = time.perf_counter()
 
             # Main control loop
             for t in range(9000):
+                print("reading action")
                 rate_controller.sleep()
                 # a. Read latest observations (raw from robot)
                 obs_data = self.controller_interface.read_state()

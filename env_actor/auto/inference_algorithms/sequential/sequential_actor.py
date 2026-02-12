@@ -59,6 +59,8 @@ class SequentialActor:
 
     def start(self) -> None:
         # 2. Start state readers (cameras and proprioception)
+        torch.backends.cudnn.benchmark = True
+        torch.set_float32_matmul_precision("high")
         print("Starting state readers...")
         self.controller_interface.start_state_readers()
 
@@ -78,9 +80,9 @@ class SequentialActor:
 
             print("Bootstrapping observation history...")
             initial_state = self.controller_interface.read_state()
-
+            print("Data manager interface is ready pre...")
             self.data_manager_interface.init_inference_obs_state_buffer(initial_state)
-
+            print("Data manager interface is ready...")
             next_t = time.perf_counter()
 
             # 5. Main control loop

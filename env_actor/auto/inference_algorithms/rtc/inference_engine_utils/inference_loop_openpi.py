@@ -93,7 +93,7 @@ def start_inference(
                 device=str(device),
                 default_prompt=default_prompt,
             )
-        policy.eval()
+        #policy.eval()
 
         # Create SharedMemoryManager from specs (attaches to existing SharedMemory)
         shm_manager = SharedMemoryInterface.attach_from_specs(
