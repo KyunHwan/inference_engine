@@ -63,7 +63,7 @@ def start_openpi_inference(
         from env_actor.auto.inference_algorithms.rtc.rtc_actor_openpi import RTCActorOpenpi
 
         env_actor = RTCActorOpenpi.\
-            options(resources={"inference_pc": 1}).\
+            options(resources={"inference_pc": 1}, num_cpus=2, num_gpus=1).\
             remote(
                 robot=robot,
                 inference_runtime_params_config=inference_runtime_params_config,
