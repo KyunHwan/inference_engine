@@ -175,12 +175,12 @@ class Pi05IgrisVlaAdapter:
             np.float32 (action_horizon, action_dim) -- denormalized actions (e.g., 50x24)
         """
         # Latest state (index 0 = most recent in data_manager history)
-        raw_state = raw_obs["proprio"].squeeze().astype(np.float32)
+        raw_state = obs["proprio"].squeeze().astype(np.float32)
 
         # Convert images: (3,H,W) uint8 CHW -> (H,W,3) uint8 HWC
         images = {}
         for ie_name in self.camera_names:
-            img_chw = raw_obs[ie_name].squeeze()               # (3,H,W) uint8
+            img_chw = obs[ie_name].squeeze()               # (3,H,W) uint8
             img_hwc = np.transpose(img_chw, (1, 2, 0))  # (H,W,3) uint8
             images[_CAM_MAP.get(ie_name, ie_name)] = img_hwc
 
