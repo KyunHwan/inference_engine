@@ -161,7 +161,7 @@ class Pi05IgrisVlaAdapter:
             norm_stats=norm_stats,
         )
 
-    def predict(self, raw_obs: dict, noise: np.ndarray | None = None) -> np.ndarray:
+    def predict(self, obs: dict, noise: np.ndarray | None = None) -> np.ndarray:
         """Run pi05_igris inference on raw observations.
 
         Args:
