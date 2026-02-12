@@ -60,81 +60,94 @@ def start_openpi_inference(
             inference_runtime_topics_config = json.load(f)
 
     if ALGORITHM == 'rtc':
-        from env_actor.auto.inference_algorithms.rtc.control_actor import ControllerActor as RTCControllerActor
-        from env_actor.auto.inference_algorithms.rtc.inference_actor_openpi import InferenceActorOpenpi as RTCInferenceActorOpenpi
-        from env_actor.auto.inference_algorithms.rtc.data_manager.utils.utils import create_shared_ndarray
+        from env_actor.auto.inference_algorithms.rtc.rtc_actor_openpi import RTCActorOpenpi
+
+        env_actor = RTCActorOpenpi.\
+            options(resources={"inference_pc": 1}).\
+            remote(
+                robot=robot,
+                inference_runtime_params_config=inference_runtime_params_config,
+                inference_runtime_topics_config=inference_runtime_topics_config,
+                min_num_actions_executed=30,
+
+                ckpt_dir=ckpt_dir,
+                default_prompt=default_prompt,
+            )
+        # from env_actor.auto.inference_algorithms.rtc.control_actor import ControllerActor as RTCControllerActor
+        # from env_actor.auto.inference_algorithms.rtc.inference_actor_openpi import InferenceActorOpenpi as RTCInferenceActorOpenpi
+        # from env_actor.auto.inference_algorithms.rtc.data_manager.utils.utils import create_shared_ndarray
 
 
-        # Create SharedMemory blocks in parent process
-        rob_shm, _, rob_spec = create_shared_ndarray(
-            (runtime_params.proprio_history_size, runtime_params.proprio_state_dim), robot_obs_history_dtype
-        )
-        head_cam_shm, _, head_cam_spec = create_shared_ndarray(
-            (runtime_params.num_img_obs, 3, runtime_params.mono_img_resize_height, runtime_params.mono_img_resize_width), cam_images_dtype
-        )
-        left_cam_shm, _, left_cam_spec = create_shared_ndarray(
-            (runtime_params.num_img_obs, 3, runtime_params.mono_img_resize_height, runtime_params.mono_img_resize_width), cam_images_dtype
-        )
-        right_cam_shm, _, right_cam_spec = create_shared_ndarray(
-            (runtime_params.num_img_obs, 3, runtime_params.mono_img_resize_height, runtime_params.mono_img_resize_width), cam_images_dtype
-        )
-        act_shm, _, act_spec = create_shared_ndarray(
-            (runtime_params.action_chunk_size, runtime_params.action_dim), action_chunk_dtype
-        )
+        # # Create SharedMemory blocks in parent process
+        # rob_shm, _, rob_spec = create_shared_ndarray(
+        #     (runtime_params.proprio_history_size, runtime_params.proprio_state_dim), robot_obs_history_dtype
+        # )
+        # head_cam_shm, _, head_cam_spec = create_shared_ndarray(
+        #     (runtime_params.num_img_obs, 3, runtime_params.mono_img_resize_height, runtime_params.mono_img_resize_width), cam_images_dtype
+        # )
+        # left_cam_shm, _, left_cam_spec = create_shared_ndarray(
+        #     (runtime_params.num_img_obs, 3, runtime_params.mono_img_resize_height, runtime_params.mono_img_resize_width), cam_images_dtype
+        # )
+        # right_cam_shm, _, right_cam_spec = create_shared_ndarray(
+        #     (runtime_params.num_img_obs, 3, runtime_params.mono_img_resize_height, runtime_params.mono_img_resize_width), cam_images_dtype
+        # )
+        # act_shm, _, act_spec = create_shared_ndarray(
+        #     (runtime_params.action_chunk_size, runtime_params.action_dim), action_chunk_dtype
+        # )
 
-        shm_specs = {
-            "proprio": rob_spec,
-            "head": head_cam_spec,
-            "left": left_cam_spec,
-            "right": right_cam_spec,
-            "action": act_spec
-        }
+        # shm_specs = {
+        #     "proprio": rob_spec,
+        #     "head": head_cam_spec,
+        #     "left": left_cam_spec,
+        #     "right": right_cam_spec,
+        #     "action": act_spec
+        # }
 
-        # Create synchronization primitives
-        lock = RLock()
-        control_iter_cond = Condition(lock)      # For num_control_iters waits
-        inference_ready_cond = Condition(lock)   # For inference_ready waits
-        stop_event = Event()
-        episode_complete_event = Event()         # For episode completion signaling
-        num_control_iters = Value('i', 0, lock=False)
-        inference_ready_flag = Value(c_bool, False, lock=False)
+        # # Create synchronization primitives
+        # lock = RLock()
+        # control_iter_cond = Condition(lock)      # For num_control_iters waits
+        # inference_ready_cond = Condition(lock)   # For inference_ready waits
+        # stop_event = Event()
+        # episode_complete_event = Event()         # For episode completion signaling
+        # num_control_iters = Value('i', 0, lock=False)
+        # inference_ready_flag = Value(c_bool, False, lock=False)
 
-        # Create inference actor (GPU-resident) with SharedMemory specs
-        inference_engine = RTCInferenceActorOpenpi.\
-                        options(resources={"inference_pc": 1}).\
-                        remote(
-                            ckpt_dir=ckpt_dir,
-                            runtime_params=runtime_params,
-                            shm_specs=shm_specs,
-                            lock=lock,
-                            control_iter_cond=control_iter_cond,
-                            inference_ready_cond=inference_ready_cond,
-                            stop_event=stop_event,
-                            episode_complete_event=episode_complete_event,
-                            num_control_iters=num_control_iters,
-                            inference_ready_flag=inference_ready_flag,
-                        )
+        # # Create inference actor (GPU-resident) with SharedMemory specs
+        # inference_engine = RTCInferenceActorOpenpi.\
+        #                 options(resources={"inference_pc": 1}).\
+        #                 remote(
+        #                     ckpt_dir=ckpt_dir,
+        #                     runtime_params=runtime_params,
+        #                     shm_specs=shm_specs,
+        #                     lock=lock,
+        #                     control_iter_cond=control_iter_cond,
+        #                     inference_ready_cond=inference_ready_cond,
+        #                     stop_event=stop_event,
+        #                     episode_complete_event=episode_complete_event,
+        #                     num_control_iters=num_control_iters,
+        #                     inference_ready_flag=inference_ready_flag,
+        #                 )
 
-        # Create controller actor (Robot I/O) with SharedMemory specs
-        controller = RTCControllerActor.\
-                        options(resources={"inference_pc": 1}).\
-                        remote(
-                            runtime_params=runtime_params,
-                            inference_runtime_topics_config=inference_runtime_topics_config,
-                            robot=robot,
-                            shm_specs=shm_specs,
-                            lock=lock,
-                            control_iter_cond=control_iter_cond,
-                            inference_ready_cond=inference_ready_cond,
-                            stop_event=stop_event,
-                            episode_complete_event=episode_complete_event,
-                            num_control_iters=num_control_iters,
-                            inference_ready_flag=inference_ready_flag,
-                        )
+        # # Create controller actor (Robot I/O) with SharedMemory specs
+        # controller = RTCControllerActor.\
+        #                 options(resources={"inference_pc": 1}).\
+        #                 remote(
+        #                     runtime_params=runtime_params,
+        #                     inference_runtime_topics_config=inference_runtime_topics_config,
+        #                     robot=robot,
+        #                     shm_specs=shm_specs,
+        #                     lock=lock,
+        #                     control_iter_cond=control_iter_cond,
+        #                     inference_ready_cond=inference_ready_cond,
+        #                     stop_event=stop_event,
+        #                     episode_complete_event=episode_complete_event,
+        #                     num_control_iters=num_control_iters,
+        #                     inference_ready_flag=inference_ready_flag,
+        #                 )
 
-        # Start the RTC actors
-        inference_engine.start.remote()
-        controller.start.remote()
+        # # Start the RTC actors
+        # inference_engine.start.remote()
+        # controller.start.remote()
     else:
         # Sequential inference
         # Import and create openpi sequential actor
@@ -150,8 +163,8 @@ def start_openpi_inference(
                         ckpt_dir=ckpt_dir,
                         default_prompt=default_prompt,
                     )
-        print(ray.get(env_actor.__ray_ready__.remote()))
-        env_actor.start.remote()
+    #print(ray.get(env_actor.__ray_ready__.remote()))
+    env_actor.start.remote()
 
 
 
