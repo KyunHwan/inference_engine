@@ -70,73 +70,75 @@ class SequentialActor:
         DT = self.controller_interface.DT
         rate_controller = self.controller_interface.recorder_rate_controller()
         episode = -1
+        try:
+            while True:
+                print("Initializing robot position...")
+                prev_joint = self.controller_interface.init_robot_position()
+                time.sleep(0.5)
+                
+                self.data_manager_interface.update_prev_joint(prev_joint)
 
-        while True:
-            print("Initializing robot position...")
-            prev_joint = self.controller_interface.init_robot_position()
-            time.sleep(0.5)
-            
-            self.data_manager_interface.update_prev_joint(prev_joint)
+                print("Bootstrapping observation history...")
+                initial_state = self.controller_interface.read_state()
+                print("Data manager interface is ready pre...")
+                self.data_manager_interface.init_inference_obs_state_buffer(initial_state)
+                print("Data manager interface is ready...")
+                next_t = time.perf_counter()
 
-            print("Bootstrapping observation history...")
-            initial_state = self.controller_interface.read_state()
-            print("Data manager interface is ready pre...")
-            self.data_manager_interface.init_inference_obs_state_buffer(initial_state)
-            print("Data manager interface is ready...")
-            next_t = time.perf_counter()
+                # 5. Main control loop
+                for t in range(9000):
+                    rate_controller.sleep()
+                    # Rate-limit to maintain target HZ
+                    # rate_controller.sleep()
 
-            # 5. Main control loop
-            for t in range(9000):
-                rate_controller.sleep()
-                # Rate-limit to maintain target HZ
-                # rate_controller.sleep()
+                    # a. Read latest observations (raw from robot)
+                    obs_data = self.controller_interface.read_state()
 
-                # a. Read latest observations (raw from robot)
-                obs_data = self.controller_interface.read_state()
+                    if 'proprio' not in obs_data:
+                        print(f"Warning: No proprio data at step {t}, skipping...")
+                        continue
 
-                if 'proprio' not in obs_data:
-                    print(f"Warning: No proprio data at step {t}, skipping...")
-                    continue
+                    # b. Update observation history in data manager
+                    self.data_manager_interface.update_state_history(obs_data)
 
-                # b. Update observation history in data manager
-                self.data_manager_interface.update_state_history(obs_data)
+                    # c. Conditionally run policy
+                    if (t % self.controller_interface.policy_update_period) == 0 or t == 0:
+                        # Get normalized observations from data manager
+                        normalized_obs = self.data_manager_interface.serve_normalized_obs_state(self.device)
 
-                # c. Conditionally run policy
-                if (t % self.controller_interface.policy_update_period) == 0 or t == 0:
-                    # Get normalized observations from data manager
-                    normalized_obs = self.data_manager_interface.serve_normalized_obs_state(self.device)
+                        # Generate noise in data manager
+                        noise = self.data_manager_interface.generate_noise(self.device)
 
-                    # Generate noise in data manager
-                    noise = self.data_manager_interface.generate_noise(self.device)
+                        # Add noise to observation dict for policy
+                        normalized_obs['noise'] = noise
 
-                    # Add noise to observation dict for policy
-                    normalized_obs['noise'] = noise
+                        # Run policy forward pass (just neural network)
+                        with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                            policy_output = self.policy.predict(normalized_obs)
 
-                    # Run policy forward pass (just neural network)
-                    with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                        policy_output = self.policy.predict(normalized_obs)
+                        # Denormalize and buffer action in data manager
+                        self.data_manager_interface.buffer_action_chunk(policy_output, t)
 
-                    # Denormalize and buffer action in data manager
-                    self.data_manager_interface.buffer_action_chunk(policy_output, t)
+                    # d. Get current action from data manager (already denormalized)
+                    action = self.data_manager_interface.get_current_action(t)
 
-                # d. Get current action from data manager (already denormalized)
-                action = self.data_manager_interface.get_current_action(t)
+                    # e. Publish action to robot (includes slew-rate limiting)
+                    smoothed_joints, fingers = self.controller_interface.publish_action(
+                                                                            action,
+                                                                            self.data_manager_interface.prev_joint
+                                                                        )
 
-                # e. Publish action to robot (includes slew-rate limiting)
-                smoothed_joints, fingers = self.controller_interface.publish_action(
-                                                                        action,
-                                                                        self.data_manager_interface.prev_joint
-                                                                    )
+                    # f. Update previous joint state in data manager
+                    self.data_manager_interface.update_prev_joint(smoothed_joints)
 
-                # f. Update previous joint state in data manager
-                self.data_manager_interface.update_prev_joint(smoothed_joints)
+                    # g. Maintain precise loop timing
+                    next_t += DT
+                    sleep_time = next_t - time.perf_counter()
+                    if sleep_time > 0.0:
+                        time.sleep(sleep_time)
 
-                # g. Maintain precise loop timing
-                next_t += DT
-                sleep_time = next_t - time.perf_counter()
-                if sleep_time > 0.0:
-                    time.sleep(sleep_time)
+                print("Episode finished !!")
 
-            print("Episode finished !!")
-
-            episode += 1
+                episode += 1
+        finally:
+            self.controller_interface.shutdown()

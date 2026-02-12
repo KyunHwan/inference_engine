@@ -33,4 +33,8 @@ class ControllerInterface:
 
     def publish_action(self, action, prev_joint):
         return self.controller_bridge.publish_action(action, prev_joint)
+
+    def shutdown(self):
+        self.controller_bridge.shutdown()
+        
     

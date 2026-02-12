@@ -71,71 +71,73 @@ class SequentialActorOpenpi:
         rate_controller = self.controller_interface.recorder_rate_controller()
         DT = self.controller_interface.DT
         episode = -1
+        try:
+            while True:
+                print("Initializing robot position...")
+                prev_joint = self.controller_interface.init_robot_position()
+                time.sleep(0.5)
 
-        while True:
-            print("Initializing robot position...")
-            prev_joint = self.controller_interface.init_robot_position()
-            time.sleep(0.5)
+                self.data_manager_interface.update_prev_joint(prev_joint)
 
-            self.data_manager_interface.update_prev_joint(prev_joint)
+                print("Bootstrapping observation history...")
+                initial_state = self.controller_interface.read_state()
+                self.data_manager_interface.init_inference_obs_state_buffer(initial_state)
+                print("Data manager interface is ready...")
+                next_t = time.perf_counter()
 
-            print("Bootstrapping observation history...")
-            initial_state = self.controller_interface.read_state()
-            self.data_manager_interface.init_inference_obs_state_buffer(initial_state)
-            print("Data manager interface is ready...")
-            next_t = time.perf_counter()
+                # Main control loop
+                for t in range(9000):
+                    print("reading action")
+                    rate_controller.sleep()
+                    # a. Read latest observations (raw from robot)
+                    obs_data = self.controller_interface.read_state()
 
-            # Main control loop
-            for t in range(9000):
-                print("reading action")
-                rate_controller.sleep()
-                # a. Read latest observations (raw from robot)
-                obs_data = self.controller_interface.read_state()
+                    if "proprio" not in obs_data:
+                        print(f"Warning: No proprio data at step {t}, skipping...")
+                        continue
 
-                if "proprio" not in obs_data:
-                    print(f"Warning: No proprio data at step {t}, skipping...")
-                    continue
+                    # b. Update observation history in data manager
+                    self.data_manager_interface.update_state_history(obs_data)
 
-                # b. Update observation history in data manager
-                self.data_manager_interface.update_state_history(obs_data)
+                    # c. Conditionally run policy
+                    if (t % self.controller_interface.policy_update_period) == 0 or t == 0:
+                        # Get RAW observations (not z-score normalized)
+                        raw_obs = self.data_manager_interface.get_raw_obs_arrays()
 
-                # c. Conditionally run policy
-                if (t % self.controller_interface.policy_update_period) == 0 or t == 0:
-                    # Get RAW observations (not z-score normalized)
-                    raw_obs = self.data_manager_interface.get_raw_obs_arrays()
+                        # Run openpi policy (handles all normalization internally)
+                        with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                            raw_actions = self.policy.predict(obs=raw_obs, noise=None)
+                        # raw_actions: np.float32 (action_horizon, action_dim) -- denormalized
 
-                    # Run openpi policy (handles all normalization internally)
-                    with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                        raw_actions = self.policy.predict(obs=raw_obs, noise=None)
-                    # raw_actions: np.float32 (action_horizon, action_dim) -- denormalized
+                        expected_shape = (self.policy.action_horizon, self.policy.action_dim)
+                        if raw_actions.shape != expected_shape:
+                            print(f"[SequentialActorOpenpi] Warning: action shape {raw_actions.shape} "
+                                f"!= expected {expected_shape}")
 
-                    expected_shape = (self.policy.action_horizon, self.policy.action_dim)
-                    if raw_actions.shape != expected_shape:
-                        print(f"[SequentialActorOpenpi] Warning: action shape {raw_actions.shape} "
-                              f"!= expected {expected_shape}")
+                        # Buffer raw actions directly (bypass data_manager's denormalization)
+                        self.data_manager_interface.openpi_buffer_denormalized_action_chunk(
+                            policy_output=raw_actions, current_step=t,
+                        )
 
-                    # Buffer raw actions directly (bypass data_manager's denormalization)
-                    self.data_manager_interface.openpi_buffer_denormalized_action_chunk(
-                        policy_output=raw_actions, current_step=t,
+                    # d. Get current action (same logic as original -- simple offset indexing)
+                    action = self.data_manager_interface.get_current_action(t)
+
+                    # e. Publish action to robot (includes slew-rate limiting)
+                    smoothed_joints, fingers = self.controller_interface.publish_action(
+                        action,
+                        self.data_manager_interface.prev_joint,
                     )
 
-                # d. Get current action (same logic as original -- simple offset indexing)
-                action = self.data_manager_interface.get_current_action(t)
+                    # f. Update previous joint state
+                    self.data_manager_interface.update_prev_joint(smoothed_joints)
 
-                # e. Publish action to robot (includes slew-rate limiting)
-                smoothed_joints, fingers = self.controller_interface.publish_action(
-                    action,
-                    self.data_manager_interface.prev_joint,
-                )
+                    # g. Maintain precise loop timing
+                    next_t += DT
+                    sleep_time = next_t - time.perf_counter()
+                    if sleep_time > 0.0:
+                        time.sleep(sleep_time)
 
-                # f. Update previous joint state
-                self.data_manager_interface.update_prev_joint(smoothed_joints)
-
-                # g. Maintain precise loop timing
-                next_t += DT
-                sleep_time = next_t - time.perf_counter()
-                if sleep_time > 0.0:
-                    time.sleep(sleep_time)
-
-            print("Episode finished !!")
-            episode += 1
+                print("Episode finished !!")
+                episode += 1
+        finally:
+            self.controller_interface.shutdown()

@@ -135,3 +135,4 @@ def start_control(
     finally:
         if 'shm_manager' in locals():
             shm_manager.cleanup()
+        controller_interface.shutdown()

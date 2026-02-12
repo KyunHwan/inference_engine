@@ -126,66 +126,68 @@ class ControllerActor:
         rate_controller = self.controller_interface.recorder_rate_controller()
         print("Starting control loop...")
         episode = -1
-
-        while True:
-            # Check stop event
-            if self.shm_manager.stop_event_is_set():
-                print("Stop event received, exiting control loop")
-                break
-
-            print("Waiting for inference actor to be ready...")
-            if not self.shm_manager.wait_for_inference_ready():
-                print("Stop event received before inference ready, exiting")
-                return
-            # Clear episode_complete after inference signals ready (ensures handshake)
-            self.shm_manager.clear_episode_complete()
-
-            # Initialize new episode
-            episode += 1
-            print(f"Starting episode {episode}...")
-
-            # Reset robot position
-            print("Initializing robot position...")
-            prev_joint = self.controller_interface.init_robot_position()
-            time.sleep(0.5)
-
-            # Reset SharedMemoryManager for new episode (direct call, no Ray)
-            self.shm_manager.reset()
-            self.shm_manager.init_action_chunk()
-            self.shm_manager.bootstrap_obs_history(obs_history=self.controller_interface.read_state())
-
-            # Main control loop for episode
-            next_t = time.perf_counter()
-
-            for t in range(self.episode_length):
-                rate_controller.sleep()
+        try:
+            while True:
                 # Check stop event
                 if self.shm_manager.stop_event_is_set():
-                    print("Stop event received during episode, exiting")
+                    print("Stop event received, exiting control loop")
+                    break
+
+                print("Waiting for inference actor to be ready...")
+                if not self.shm_manager.wait_for_inference_ready():
+                    print("Stop event received before inference ready, exiting")
                     return
+                # Clear episode_complete after inference signals ready (ensures handshake)
+                self.shm_manager.clear_episode_complete()
 
-                # a. Read latest observations
-                obs_data = self.controller_interface.read_state()
+                # Initialize new episode
+                episode += 1
+                print(f"Starting episode {episode}...")
 
-                if "proprio" not in obs_data:
-                    print(f"Warning: No proprio data at step {t}, skipping...")
-                    continue
+                # Reset robot position
+                print("Initializing robot position...")
+                prev_joint = self.controller_interface.init_robot_position()
+                time.sleep(0.5)
 
-                # e. Update SharedMemory (atomic write + increment, direct call)
-                action = self.shm_manager.atomic_write_obs_and_increment_get_action(obs=obs_data, 
-                                                                                    action_chunk_size=self.runtime_params.action_chunk_size)
+                # Reset SharedMemoryManager for new episode (direct call, no Ray)
+                self.shm_manager.reset()
+                self.shm_manager.init_action_chunk()
+                self.shm_manager.bootstrap_obs_history(obs_history=self.controller_interface.read_state())
 
-                # h. Publish action to robot (includes slew-rate limiting)
-                smoothed_joints, fingers = self.controller_interface.publish_action(action, prev_joint)
+                # Main control loop for episode
+                next_t = time.perf_counter()
 
-                # j. Update previous joint state
-                prev_joint = smoothed_joints
+                for t in range(self.episode_length):
+                    rate_controller.sleep()
+                    # Check stop event
+                    if self.shm_manager.stop_event_is_set():
+                        print("Stop event received during episode, exiting")
+                        return
 
-                # k. Maintain precise loop timing
-                next_t += self.controller_interface.DT
-                sleep_time = next_t - time.perf_counter()
-                if sleep_time > 0.0:
-                    time.sleep(sleep_time)
+                    # a. Read latest observations
+                    obs_data = self.controller_interface.read_state()
 
-            print(f"Episode {episode} finished!")
-            self.shm_manager.signal_episode_complete()
+                    if "proprio" not in obs_data:
+                        print(f"Warning: No proprio data at step {t}, skipping...")
+                        continue
+
+                    # e. Update SharedMemory (atomic write + increment, direct call)
+                    action = self.shm_manager.atomic_write_obs_and_increment_get_action(obs=obs_data, 
+                                                                                        action_chunk_size=self.runtime_params.action_chunk_size)
+
+                    # h. Publish action to robot (includes slew-rate limiting)
+                    smoothed_joints, fingers = self.controller_interface.publish_action(action, prev_joint)
+
+                    # j. Update previous joint state
+                    prev_joint = smoothed_joints
+
+                    # k. Maintain precise loop timing
+                    next_t += self.controller_interface.DT
+                    sleep_time = next_t - time.perf_counter()
+                    if sleep_time > 0.0:
+                        time.sleep(sleep_time)
+
+                print(f"Episode {episode} finished!")
+                self.shm_manager.signal_episode_complete()
+        finally:
+            self.controller_interface.shutdown()
