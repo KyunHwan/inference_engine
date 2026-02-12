@@ -80,6 +80,7 @@ class InferenceActorOpenpi:
     
     def __init__(
         self,
+        ckpt_dir,
         runtime_params,
         shm_specs: dict[str: ShmArraySpec],
         lock: RLockType,
@@ -89,7 +90,6 @@ class InferenceActorOpenpi:
         episode_complete_event: EventType,
         num_control_iters: Any,  # multiprocessing.Value
         inference_ready_flag: Any,  # multiprocessing.Value
-        ckpt_dir,
         default_prompt=None,
     ):
         import torch

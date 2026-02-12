@@ -103,6 +103,7 @@ def start_openpi_inference(
         inference_engine = RTCInferenceActorOpenpi.\
                         options(resources={"inference_pc": 1}).\
                         remote(
+                            ckpt_dir=ckpt_dir,
                             runtime_params=runtime_params,
                             shm_specs=shm_specs,
                             lock=lock,
