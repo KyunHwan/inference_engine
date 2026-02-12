@@ -82,7 +82,7 @@ class DataManagerBridge:
     def update_prev_joint(self, val):
         """Update previous joint state for slew-rate limiting."""
         # prev joint needs to be initialized via init_robot_position method of Controller Bridge/Interface method
-        self.prev_joint = val
+        self._prev_joint = val
 
     def update_norm_stats(self):
         """Update normalization stats (placeholder for future dynamic stats updates)."""
