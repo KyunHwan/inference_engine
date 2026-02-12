@@ -100,7 +100,7 @@ def start_control(
 
             # Main control loop for episode
             next_t = time.perf_counter()
-
+            print("Control loop started...")
             for t in range(episode_length):
                 # Check stop event
                 if shm_manager.stop_event_is_set():
@@ -109,7 +109,7 @@ def start_control(
 
                 # a. Read latest observations
                 obs_data = controller_interface.read_state()
-
+                print("Read a state...")
                 if "proprio" not in obs_data:
                     print(f"Warning: No proprio data at step {t}, skipping...")
                     continue
