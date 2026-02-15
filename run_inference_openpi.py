@@ -165,9 +165,6 @@ def start_openpi_inference(
                     )
     #print(ray.get(env_actor.__ray_ready__.remote()))
     env_actor.start.remote()
-
-
-
     
 
     # Block until Ray shuts down

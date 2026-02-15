@@ -2,7 +2,7 @@ import numpy as np
 import json
 import ray
 from ctypes import c_bool
-from multiprocessing import Process, resource_tracker, Condition, Event, RLock, Value
+# from multiprocessing import Process, resource_tracker, Condition, Event, RLock, Value
 
 @ray.remote(num_gpus=1)
 class RTCActorOpenpi:
@@ -28,7 +28,10 @@ class RTCActorOpenpi:
         from env_actor.auto.inference_algorithms.rtc.data_manager.utils.utils import create_shared_ndarray
         from .inference_engine_utils.control_loop import start_control
         from .inference_engine_utils.inference_loop_openpi import start_inference
+        import multiprocessing as mp
+        from multiprocessing import resource_tracker
 
+        ctx = mp.get_context("spawn")
 
         # Load robot-specific RuntimeParams
         if self.robot == "igris_b":
@@ -73,16 +76,16 @@ class RTCActorOpenpi:
         }
 
         # Create synchronization primitives
-        lock = RLock()
-        control_iter_cond = Condition(lock)      # For num_control_iters waits
-        inference_ready_cond = Condition(lock)   # For inference_ready waits
-        stop_event = Event()
-        episode_complete_event = Event()         # For episode completion signaling
-        num_control_iters = Value('i', 0, lock=False)
-        inference_ready_flag = Value(c_bool, False, lock=False)
+        lock = ctx.RLock()
+        control_iter_cond = ctx.Condition(lock)      # For num_control_iters waits
+        inference_ready_cond = ctx.Condition(lock)   # For inference_ready waits
+        stop_event = ctx.Event()
+        episode_complete_event = ctx.Event()         # For episode completion signaling
+        num_control_iters = ctx.Value('i', 0, lock=False)
+        inference_ready_flag = ctx.Value(c_bool, False, lock=False)
         
         # Pass ONLY specs to children; they will attach by name
-        inference_runner = Process(
+        inference_runner = ctx.Process(
             target=start_inference,
             args=(
                 self.robot,
@@ -102,7 +105,7 @@ class RTCActorOpenpi:
             ),
             daemon=False
         )
-        controller = Process(
+        controller = ctx.Process(
             target=start_control,
             args=(
                 self.robot,
