@@ -284,12 +284,12 @@ class DataManagerBridge:
     def serve_init_action(self,):
         """ Serve init action for RTC Guided Inference """
         init_vec = np.asarray(
-            INIT_JOINT_LIST + INIT_HAND_LIST,
+            INIT_JOINT_LIST[6:] + INIT_JOINT_LIST[:6] + INIT_HAND_LIST[:6] + INIT_HAND_LIST[6:],
             dtype=np.float32,
         )
         # Convert joints to radians, scale fingers
-        init_vec[:len(init_vec)//2] *= np.pi / 180.0
-        init_vec[len(init_vec)//2:] *= 0.03
+        init_vec[:12] *= np.pi / 180.0
+        init_vec[12:] *= 0.03
 
         # Repeat across all rows
         return np.tile(init_vec, (self.runtime_params.action_chunk_size, 1))

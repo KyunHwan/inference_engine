@@ -115,7 +115,7 @@ def start_control(
 
                 # e. Update SharedMemory (atomic write + increment, direct call)
                 action = shm_manager.atomic_write_obs_and_increment_get_action(obs=obs_data, 
-                                                                                    action_chunk_size=runtime_params.action_chunk_size)
+                                                                                action_chunk_size=runtime_params.action_chunk_size)
 
                 # h. Publish action to robot (includes slew-rate limiting)
                 smoothed_joints, fingers = controller_interface.publish_action(action, prev_joint)
