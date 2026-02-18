@@ -38,7 +38,7 @@ class MaxDeque:
         Returns:
             Maximum delay value, or 0 if buffer is empty
         """
-        return max(self.dq) if self.dq else 0
+        return max(self.dq) if self.dq else 1
 
     def clear(self) -> None:
         """Clear all values from the buffer."""
