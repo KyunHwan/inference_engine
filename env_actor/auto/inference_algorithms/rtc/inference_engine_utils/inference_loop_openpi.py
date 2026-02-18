@@ -13,7 +13,7 @@ def _compute_guided_prefix_weights(
     if start >= total:
         return np.ones(total, dtype=np.float32)
     span = max(int(executed_steps), 1)
-    #span = min(span, max(total - start, 1))
+    span = min(span, max(total - start, 1))
     
     indices = np.arange(total, dtype=np.float32)
     if schedule == "ones":
