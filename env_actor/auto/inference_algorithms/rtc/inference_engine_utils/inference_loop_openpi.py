@@ -151,12 +151,12 @@ def start_inference(
                     pred_actions = policy.predict(obs=input_data, noise=None)
 
                 blend_steps = max(1, min(input_data['est_delay'], 
-                                         min_num_actions_executed - input_data['est_delay']))
+                                         min_num_actions_executed - input_data['est_delay']) // 2)
                 weights = _compute_guided_prefix_weights(
                     input_data['est_delay'],
                     blend_steps, # executed steps
                     runtime_params.action_chunk_size, # total
-                    schedule="exp",
+                    schedule="zeros",
                 ).reshape(-1, 1)
                 next_actions = input_data['prev_action'] * weights + pred_actions * (1.0 - weights)
                 
