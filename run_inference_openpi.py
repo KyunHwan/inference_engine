@@ -68,7 +68,7 @@ def start_openpi_inference(
                 robot=robot,
                 inference_runtime_params_config=inference_runtime_params_config,
                 inference_runtime_topics_config=inference_runtime_topics_config,
-                min_num_actions_executed=30,
+                min_num_actions_executed=35,
 
                 ckpt_dir=ckpt_dir,
                 default_prompt=default_prompt,
