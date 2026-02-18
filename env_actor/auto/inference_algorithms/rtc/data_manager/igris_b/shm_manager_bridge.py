@@ -331,12 +331,12 @@ class SharedMemoryManager:
         with self._lock:
             """ Serve init action for RTC Guided Inference """
             init_vec = np.asarray(
-                INIT_JOINT_LIST[6:] + INIT_JOINT_LIST[:6] + INIT_HAND_LIST[:6] + INIT_HAND_LIST[6:],
+                INIT_JOINT_LIST + INIT_HAND_LIST,
                 dtype=np.float32,
             )
             # Convert joints to radians, scale fingers
-            init_vec[:12] *= np.pi / 180.0
-            init_vec[12:] *= 0.03
+            init_vec[:len(init_vec)//2] *= np.pi / 180.0
+            init_vec[len(init_vec)//2:] *= 0.03
 
             # Repeat across all rows
             np.copyto(self._shm_array_dict['action'], 

@@ -112,11 +112,10 @@ def start_inference(
 
         # Warm up CUDA (once, outside all loops)
         print("Warming up CUDA kernels...")
-        with torch.no_grad():
-            try:
-                policy.warmup()
-            except Exception as e:
-                print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
+        try:
+            policy.warmup()
+        except Exception as e:
+            print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
 
         print("Starting inference loop...")
 
