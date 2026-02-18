@@ -9,46 +9,46 @@ def _compute_guided_prefix_weights(
     schedule: str = "exp",
 ) -> np.ndarray:
     """Guided-inference prefix weighting for blending neighboring action chunks."""
-    # start = max(min(int(delay_steps), total), 0)
-    # if start >= total:
-    #     return np.ones(total, dtype=np.float32)
-    # span = max(int(executed), 1)
-    # span = min(span, max(total - start, 1))
-    
-    # indices = np.arange(total, dtype=np.float32)
-    # if schedule == "ones":
-    #     return np.ones(total, dtype=np.float32)
-    # if schedule == "zeros":
-    #     return (indices < start).astype(np.float32)
-    # weights = np.zeros(total, dtype=np.float32)
-    # weights[:start] = 1.0
-    # denom = total - span - start + 1
-    # if denom > 0 and (total - span) > start:
-    #     c_i = (total - span - indices) / float(denom)
-    #     inter_vals = c_i * np.expm1(c_i) / (math.e - 1.0)
-    #     weights[start : total - span] = inter_vals[start : total - span]
-    # weights[total - span :] = 0.0
-    # return weights
     start = max(min(int(delay_steps), total), 0)
+    if start >= total:
+        return np.ones(total, dtype=np.float32)
     span = max(int(executed), 1)
     span = min(span, max(total - start, 1))
-    end = max(total, start + span)
-    if end < start:
-        start = end
-    indices = np.arange(end, dtype=np.float32)
-    weights = np.zeros(end, dtype=np.float32)
-    weights[:start] = 1.0
+    
+    indices = np.arange(total, dtype=np.float32)
     if schedule == "ones":
-        weights = np.ones_like(indices)
-    elif schedule == "zeros":
-        weights = (indices < start).float()
-    else:
-        denom = end - span - start + 1
-        c_i = (end - span - indices) / denom
+        return np.ones(total, dtype=np.float32)
+    if schedule == "zeros":
+        return (indices < start).astype(np.float32)
+    weights = np.zeros(total, dtype=np.float32)
+    weights[:start] = 1.0
+    denom = total - span - start + 1
+    if denom > 0 and (total - span) > start:
+        c_i = (total - span - indices) / float(denom)
         inter_vals = c_i * np.expm1(c_i) / (math.e - 1.0)
-        weights[start : end - span] = inter_vals[start : end - span]
-        weights[end - span :] = 0.0
+        weights[start : total - span] = inter_vals[start : total - span]
+    weights[total - span :] = 0.0
     return weights
+    # start = max(min(int(delay_steps), total), 0)
+    # span = max(int(executed), 1)
+    # span = min(span, max(total - start, 1))
+    # end = max(total, start + span)
+    # if end < start:
+    #     start = end
+    # indices = np.arange(end, dtype=np.float32)
+    # weights = np.zeros(end, dtype=np.float32)
+    # weights[:start] = 1.0
+    # if schedule == "ones":
+    #     weights = np.ones_like(indices)
+    # elif schedule == "zeros":
+    #     weights = (indices < start).float()
+    # else:
+    #     denom = end - span - start + 1
+    #     c_i = (end - span - indices) / denom
+    #     inter_vals = c_i * np.expm1(c_i) / (math.e - 1.0)
+    #     weights[start : end - span] = inter_vals[start : end - span]
+    #     weights[end - span :] = 0.0
+    # return weights
 
     
 
@@ -95,8 +95,24 @@ def start_inference(
                 inference_runtime_topics_config = json.load(f)
 
         """Initialize the inference actor."""
-        # Set up device and CUDA optimizations
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        policy = Pi05IgrisVlaAdapter(
+                ckpt_dir=ckpt_dir,
+                device=str(device),
+                default_prompt=default_prompt,
+            )
+        #policy.eval()
+        
+        # Warm up CUDA (once, outside all loops)
+        print("Warming up CUDA kernels...")
+        with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            try:
+                policy.warmup()
+            except Exception as e:
+                print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
+
+        # Set up device and CUDA optimizations
         torch.backends.cudnn.benchmark = True
         torch.set_float32_matmul_precision("high")
         """Main inference loop implementation.
@@ -109,13 +125,7 @@ def start_inference(
         - Outer loop handles per-episode transitions
         - Inner loop handles inference iterations within an episode
         """
-
-        policy = Pi05IgrisVlaAdapter(
-                ckpt_dir=ckpt_dir,
-                device=str(device),
-                default_prompt=default_prompt,
-            )
-        #policy.eval()
+        
 
         # Create SharedMemoryManager from specs (attaches to existing SharedMemory)
         shm_manager = SharedMemoryInterface.attach_from_specs(
@@ -132,13 +142,6 @@ def start_inference(
 
         data_normalization_bridge = DataNormalizationInterface(robot=robot, data_stats=runtime_params.read_stats_file())
 
-        # Warm up CUDA (once, outside all loops)
-        print("Warming up CUDA kernels...")
-        with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-            try:
-                policy.warmup()
-            except Exception as e:
-                print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
 
         print("Starting inference loop...")
 
