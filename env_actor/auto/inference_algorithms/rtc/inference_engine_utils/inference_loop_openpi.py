@@ -27,7 +27,7 @@ def _compute_guided_prefix_weights(
         c_i = (total - span - indices) / float(denom)
         inter_vals = c_i * np.expm1(c_i) / (math.e - 1.0)
         weights[start : total - span] = inter_vals[start : total - span]
-    weights[total - span :] = 0.0
+    weights[total - span:] = 0.0
     return weights
     # start = max(min(int(delay_steps), total), 0)
     # span = max(int(executed), 1)
