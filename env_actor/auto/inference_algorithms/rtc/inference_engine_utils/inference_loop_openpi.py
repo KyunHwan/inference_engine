@@ -3,32 +3,53 @@ import math
 
 def _compute_guided_prefix_weights(
     delay_steps: int,
-    executed_steps: int,
+    executed: int,
     total: int,
     *,
     schedule: str = "exp",
 ) -> np.ndarray:
     """Guided-inference prefix weighting for blending neighboring action chunks."""
-    start = max(min(int(delay_steps), total), 0)
-    if start >= total:
-        return np.ones(total, dtype=np.float32)
-    span = max(int(executed_steps), 1)
-    span = min(span, max(total - start, 1))
+    # start = max(min(int(delay_steps), total), 0)
+    # if start >= total:
+    #     return np.ones(total, dtype=np.float32)
+    # span = max(int(executed), 1)
+    # span = min(span, max(total - start, 1))
     
-    indices = np.arange(total, dtype=np.float32)
-    if schedule == "ones":
-        return np.ones(total, dtype=np.float32)
-    if schedule == "zeros":
-        return (indices < start).astype(np.float32)
-    weights = np.zeros(total, dtype=np.float32)
+    # indices = np.arange(total, dtype=np.float32)
+    # if schedule == "ones":
+    #     return np.ones(total, dtype=np.float32)
+    # if schedule == "zeros":
+    #     return (indices < start).astype(np.float32)
+    # weights = np.zeros(total, dtype=np.float32)
+    # weights[:start] = 1.0
+    # denom = total - span - start + 1
+    # if denom > 0 and (total - span) > start:
+    #     c_i = (total - span - indices) / float(denom)
+    #     inter_vals = c_i * np.expm1(c_i) / (math.e - 1.0)
+    #     weights[start : total - span] = inter_vals[start : total - span]
+    # weights[total - span :] = 0.0
+    # return weights
+    start = max(min(int(delay_steps), total), 0)
+    span = max(int(executed), 1)
+    end = max(total, start + span)
+    if end < start:
+        start = end
+    indices = np.arange(end, dtype=np.float32)
+    weights = np.zeros(end, dtype=np.float32)
     weights[:start] = 1.0
-    denom = total - span - start + 1
-    if denom > 0 and (total - span) > start:
-        c_i = (total - span - indices) / float(denom)
+    if schedule == "ones":
+        weights = np.ones_like(indices)
+    elif schedule == "zeros":
+        weights = (indices < start).float()
+    else:
+        denom = end - span - start + 1
+        c_i = (end - span - indices) / denom
         inter_vals = c_i * np.expm1(c_i) / (math.e - 1.0)
-        weights[start : total - span] = inter_vals[start : total - span]
-    weights[total - span :] = 0.0
+        weights[start : end - span] = inter_vals[start : end - span]
+        weights[end - span :] = 0.0
     return weights
+
+    
 
 def start_inference(
         robot,
@@ -148,11 +169,11 @@ def start_inference(
                 with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     pred_actions = policy.predict(obs=input_data, noise=None)
 
-                blend_steps = max(1, min(input_data['est_delay'], 
-                                         min_num_actions_executed - input_data['est_delay']))
+                # blend_steps = max(1, min(input_data['est_delay'], 
+                #                          min_num_actions_executed - input_data['est_delay']))
                 weights = _compute_guided_prefix_weights(
                     input_data['est_delay'],
-                    blend_steps, # executed steps
+                    min_num_actions_executed, # executed steps
                     runtime_params.action_chunk_size, # total
                     schedule="exp",
                 ).reshape(-1, 1)
