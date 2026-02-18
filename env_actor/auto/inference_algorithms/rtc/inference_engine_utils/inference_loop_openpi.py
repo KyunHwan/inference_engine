@@ -31,6 +31,7 @@ def _compute_guided_prefix_weights(
     # return weights
     start = max(min(int(delay_steps), total), 0)
     span = max(int(executed), 1)
+    span = min(span, max(total - start, 1))
     end = max(total, start + span)
     if end < start:
         start = end
@@ -133,10 +134,11 @@ def start_inference(
 
         # Warm up CUDA (once, outside all loops)
         print("Warming up CUDA kernels...")
-        try:
-            policy.warmup()
-        except Exception as e:
-            print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
+        with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            try:
+                policy.warmup()
+            except Exception as e:
+                print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
 
         print("Starting inference loop...")
 
