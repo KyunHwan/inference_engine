@@ -36,7 +36,7 @@ def start_openpi_inference(
     # Initialize Ray
     if ray.is_initialized():
         ray.shutdown()
-    ray.init(address="auto", namespace="inference_engine")
+    ray.init(address="auto", namespace="inference_engine", log_to_driver=True)
 
     # Load robot-specific RuntimeParams
     if robot == "igris_b":
