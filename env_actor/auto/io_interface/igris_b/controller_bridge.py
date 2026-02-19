@@ -108,8 +108,6 @@ class ControllerBridge:
         finger_msg.data = list(right_finger_pos) + list(left_finger_pos)
         self.finger_pub.publish(finger_msg)
 
-        # TODO: Implement returning smoothed_joints
-
         # This output should be used to update prev_joint in the Data Manager Bridge/Interface
         return smoothed_joints, np.concatenate([left_finger_pos, right_finger_pos])
     

@@ -335,7 +335,7 @@ class SharedMemoryManager:
                 dtype=np.float32,
             )
             # Convert joints to radians, scale fingers
-            init_vec[:12] *= np.pi / 180.0
+            init_vec[:12] *= (np.pi / 180.0)
             init_vec[12:] *= 0.03
 
             # Repeat across all rows

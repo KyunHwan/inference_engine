@@ -27,7 +27,7 @@ def _compute_guided_prefix_weights(
         c_i = (total - span - indices) / float(denom)
         inter_vals = c_i * np.expm1(c_i) / (math.e - 1.0)
         weights[start : total - span] = inter_vals[start : total - span]
-    weights[total - span:] = 0.0
+    weights[total - span :] = 0.0
     return weights
     # start = max(min(int(delay_steps), total), 0)
     # span = max(int(executed), 1)
@@ -95,7 +95,10 @@ def start_inference(
                 inference_runtime_topics_config = json.load(f)
 
         """Initialize the inference actor."""
+        # Set up device and CUDA optimizations
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        torch.backends.cudnn.benchmark = True
+        torch.set_float32_matmul_precision("high")
 
         policy = Pi05IgrisVlaAdapter(
                 ckpt_dir=ckpt_dir,
@@ -112,9 +115,7 @@ def start_inference(
             except Exception as e:
                 print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
 
-        # Set up device and CUDA optimizations
-        torch.backends.cudnn.benchmark = True
-        torch.set_float32_matmul_precision("high")
+        
         """Main inference loop implementation.
 
         Note: Changed from async to sync since SharedMemoryManager uses
