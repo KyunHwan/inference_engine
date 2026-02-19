@@ -1,12 +1,11 @@
-"""Entry point for pi05_igris (openpi) sequential inference.
+"""Entry point for openpi inference via build_policy().
 
 Usage:
   python run_inference_openpi.py \
-    --ckpt_dir /path/to/vla_checkpoint/15000 \
+    --policy_yaml_path ./env_actor/policy/policies/openpi_policy/openpi_policy.yaml \
     --robot igris_b \
     --inference_runtime_params_config /path/to/config.json \
-    --inference_runtime_topics_config /path/to/topics.json \
-    --default_prompt "pick and place"
+    --inference_runtime_topics_config /path/to/topics.json
 """
 
 import os
@@ -29,11 +28,10 @@ action_chunk_dtype = np.float32
 
 
 def start_openpi_inference(
-    ckpt_dir,
+    policy_yaml_path,
     robot,
     inference_runtime_params_config,
     inference_runtime_topics_config,
-    default_prompt=None,
 ):
     # Initialize Ray
     if ray.is_initialized():
@@ -70,8 +68,7 @@ def start_openpi_inference(
                 inference_runtime_topics_config=inference_runtime_topics_config,
                 min_num_actions_executed=35,
 
-                ckpt_dir=ckpt_dir,
-                default_prompt=default_prompt,
+                policy_yaml_path=policy_yaml_path,
             )
         # from env_actor.auto.inference_algorithms.rtc.control_actor import ControllerActor as RTCControllerActor
         # from env_actor.auto.inference_algorithms.rtc.inference_actor_openpi import InferenceActorOpenpi as RTCInferenceActorOpenpi
@@ -160,8 +157,7 @@ def start_openpi_inference(
                         runtime_params=runtime_params,
                         inference_runtime_topics_config=inference_runtime_topics_config,
                         robot=robot,
-                        ckpt_dir=ckpt_dir,
-                        default_prompt=default_prompt,
+                        policy_yaml_path=policy_yaml_path,
                     )
     #print(ray.get(env_actor.__ray_ready__.remote()))
     env_actor.start.remote()
@@ -184,34 +180,28 @@ if __name__ == "__main__":
     except RuntimeError:
         pass
 
-    parser = argparse.ArgumentParser(description="Run pi05_igris (openpi) inference")
+    parser = argparse.ArgumentParser(description="Run openpi inference via build_policy()")
     parser.add_argument(
-        "--ckpt_dir", "-C", type=str,
-        default="/home/robros/Projects/robros_vla_inference_engine/openpi_film/checkpoints/pi05_igris/pi05_igris_b_pnp_v3.3.2/film_15000",
-        help="Path to OpenPI checkpoint step directory (contains model.safetensors + assets/)",
+        "--policy_yaml_path", "-P", type=str,
+        default="./env_actor/policy/policies/openpi_policy/openpi_policy.yaml",
+        help="Path to policy YAML config (ckpt_dir and default_prompt are set in the component YAML)",
     )
     parser.add_argument("--robot", required=True, choices=["igris_b", "igris_c"])
     parser.add_argument(
-        "--inference_runtime_params_config", 
+        "--inference_runtime_params_config",
         default="./env_actor/runtime_settings_configs/igris_b/inference_runtime_params.json",
         help="Path to inference runtime params JSON config",
     )
     parser.add_argument(
-        "--inference_runtime_topics_config", 
+        "--inference_runtime_topics_config",
         default="./env_actor/runtime_settings_configs/igris_b/inference_runtime_topics.json",
         help="Path to inference runtime topics config",
-    )
-    parser.add_argument(
-        "--default_prompt", type=str,
-        default="Pick up objects on the table with the left hand and place them into the box.",
-        help="Default language prompt for the policy (e.g., 'pick and place')",
     )
     args = parser.parse_args()
 
     start_openpi_inference(
-        ckpt_dir=args.ckpt_dir,
+        policy_yaml_path=args.policy_yaml_path,
         robot=args.robot,
         inference_runtime_params_config=args.inference_runtime_params_config,
         inference_runtime_topics_config=args.inference_runtime_topics_config,
-        default_prompt=args.default_prompt,
     )

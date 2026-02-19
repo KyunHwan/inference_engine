@@ -1,7 +1,7 @@
-"""Sequential inference engine for pi05_igris (openpi) policy.
+"""Sequential inference engine for openpi policy.
 
 Variant of sequential_actor.py that:
-- Creates Pi05IgrisVlaAdapter via vla_'s create_trained_policy (not build_policy)
+- Creates OpenPiPolicy via build_policy() from a YAML config
 - Uses get_raw_obs_arrays() for raw observations (no z-score normalization)
 - Buffers raw denormalized actions directly (no z-score denormalization step)
 """
@@ -13,21 +13,20 @@ import ray
 
 @ray.remote(num_gpus=1)
 class SequentialActorOpenpi:
-    """Sequential inference loop using pi05_igris (openpi) policy.
+    """Sequential inference loop using openpi policy via build_policy().
 
     Orchestration (same as SequentialActor):
     1. Controller reads raw state
     2. DataManager buffers observation history
     3. Policy runs forward pass on raw observations
-    4. Actions buffered directly (already denormalized by vla_)
+    4. Actions buffered directly (already denormalized by openpi)
     5. Controller publishes action
 
     Args:
         runtime_params: RuntimeParams instance with config dimensions
         inference_runtime_topics_config: ROS/comms topic configuration
         robot: Robot identifier ("igris_b" or "igris_c")
-        ckpt_dir: Path to vla_ checkpoint dir (contains model.safetensors + assets/)
-        default_prompt: Optional language instruction for the policy
+        policy_yaml_path: Path to policy YAML config for build_policy()
     """
 
     def __init__(
@@ -35,20 +34,18 @@ class SequentialActorOpenpi:
         runtime_params,
         inference_runtime_topics_config,
         robot,
-        ckpt_dir,
-        default_prompt=None,
+        policy_yaml_path,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         from env_actor.auto.io_interface.controller_interface import ControllerInterface
         from .data_manager.data_manager_interface import DataManagerInterface
-        from env_actor.policy.policies.pi05_igris.pi05_igris import Pi05IgrisVlaAdapter
-        
-        # Create pi05_igris via vla_'s factory (NOT build_policy)
-        self.policy = Pi05IgrisVlaAdapter(
-            ckpt_dir=ckpt_dir,
-            device=str(self.device),
-            default_prompt=default_prompt,
+        from env_actor.policy.utils.loader import build_policy
+
+        # Build policy via config-driven loader
+        self.policy = build_policy(
+            policy_yaml_path=policy_yaml_path,
+            map_location=self.device,
         )
         print(f"[SequentialActorOpenpi] Policy: action_dim={self.policy.action_dim}, "
               f"state_dim={self.policy.state_dim}, action_horizon={self.policy.action_horizon}")

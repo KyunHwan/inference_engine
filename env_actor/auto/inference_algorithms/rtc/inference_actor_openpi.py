@@ -80,7 +80,7 @@ class InferenceActorOpenpi:
     
     def __init__(
         self,
-        ckpt_dir,
+        policy_yaml_path,
         runtime_params,
         shm_specs: dict[str: ShmArraySpec],
         lock: RLockType,
@@ -90,12 +90,11 @@ class InferenceActorOpenpi:
         episode_complete_event: EventType,
         num_control_iters: Any,  # multiprocessing.Value
         inference_ready_flag: Any,  # multiprocessing.Value
-        default_prompt=None,
     ):
         import torch
         from .data_manager.data_normalization_interface import DataNormalizationInterface
         from .data_manager.shm_manager_interface import SharedMemoryInterface
-        from env_actor.policy.policies.pi05_igris.pi05_igris import Pi05IgrisVlaAdapter
+        from env_actor.policy.utils.loader import build_policy
 
         self.runtime_params = runtime_params
 
@@ -106,11 +105,9 @@ class InferenceActorOpenpi:
         torch.set_float32_matmul_precision("high")
 
         # Build policy using env_actor loader
-        # Create pi05_igris via vla_'s factory (NOT build_policy)
-        self.policy = Pi05IgrisVlaAdapter(
-            ckpt_dir=ckpt_dir,
-            device=str(self.device),
-            default_prompt=default_prompt,
+        self.policy = build_policy(
+            policy_yaml_path=policy_yaml_path,
+            map_location=self.device,
         )
 
         self.policy.eval()

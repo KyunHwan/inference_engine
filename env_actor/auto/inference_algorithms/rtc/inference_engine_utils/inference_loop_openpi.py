@@ -54,8 +54,7 @@ def _compute_guided_prefix_weights(
 
 def start_inference(
         robot,
-        ckpt_dir,
-        default_prompt,
+        policy_yaml_path,
         min_num_actions_executed,
         inference_runtime_params_config,
         inference_runtime_topics_config,
@@ -73,7 +72,7 @@ def start_inference(
     import json
     from ..data_manager.data_normalization_interface import DataNormalizationInterface
     from ..data_manager.shm_manager_interface import SharedMemoryInterface
-    from env_actor.policy.policies.pi05_igris.pi05_igris import Pi05IgrisVlaAdapter
+    from env_actor.policy.utils.loader import build_policy
     
     try:
         # Load robot-specific RuntimeParams
@@ -100,10 +99,9 @@ def start_inference(
         torch.backends.cudnn.benchmark = True
         torch.set_float32_matmul_precision("high")
 
-        policy = Pi05IgrisVlaAdapter(
-                ckpt_dir=ckpt_dir,
-                device=str(device),
-                default_prompt=default_prompt,
+        policy = build_policy(
+                policy_yaml_path=policy_yaml_path,
+                map_location=device,
             )
         #policy.eval()
         

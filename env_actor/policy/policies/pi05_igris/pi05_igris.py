@@ -175,7 +175,10 @@ class Pi05IgrisVlaAdapter:
             np.float32 (action_horizon, action_dim) -- denormalized actions (e.g., 50x24)
         """
         # Latest state (index 0 = most recent in data_manager history)
-        raw_state = obs["proprio"].squeeze().astype(np.float32)
+        if len(obs["proprio"].shape) == 3:
+            raw_state = obs["proprio"].squeeze(0)[0].astype(np.float32)
+        elif len(obs["proprio"].shape) == 2:
+            raw_state = obs["proprio"][0].astype(np.float32)
 
         # Convert images: (3,H,W) uint8 CHW -> (H,W,3) uint8 HWC
         images = {}

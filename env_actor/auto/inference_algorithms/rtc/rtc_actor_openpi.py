@@ -12,8 +12,7 @@ class RTCActorOpenpi:
                  inference_runtime_topics_config,
                  min_num_actions_executed,
 
-                 ckpt_dir,
-                 default_prompt=None,
+                 policy_yaml_path,
                  ):
 
         self.robot = robot
@@ -21,8 +20,7 @@ class RTCActorOpenpi:
         self.inference_runtime_topics_config = inference_runtime_topics_config
         self.min_num_actions_executed = min_num_actions_executed
 
-        self.ckpt_dir = ckpt_dir
-        self.default_prompt = default_prompt
+        self.policy_yaml_path = policy_yaml_path
     
     def start(self):
         from env_actor.auto.inference_algorithms.rtc.data_manager.utils.utils import create_shared_ndarray
@@ -89,8 +87,7 @@ class RTCActorOpenpi:
             target=start_inference,
             args=(
                 self.robot,
-                self.ckpt_dir,
-                self.default_prompt,
+                self.policy_yaml_path,
                 self.min_num_actions_executed,
                 self.inference_runtime_params_config,
                 self.inference_runtime_topics_config,
