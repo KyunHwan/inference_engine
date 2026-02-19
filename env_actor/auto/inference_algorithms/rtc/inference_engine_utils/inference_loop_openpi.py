@@ -102,8 +102,8 @@ def start_inference(
         policy = build_policy(
                 policy_yaml_path=policy_yaml_path,
                 map_location=device,
-            )
-        #policy.eval()
+            ).to(device)
+        policy.eval()
         
         # Warm up CUDA (once, outside all loops)
         print("Warming up CUDA kernels...")
