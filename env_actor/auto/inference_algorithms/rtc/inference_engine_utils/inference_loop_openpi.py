@@ -107,7 +107,7 @@ def start_inference(
         
         # Warm up CUDA (once, outside all loops)
         print("Warming up CUDA kernels...")
-        with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
             try:
                 policy.warmup()
             except Exception as e:
@@ -170,7 +170,7 @@ def start_inference(
 
                 # Normalize observations and prev_action_chunk
                 # normalized_input_data = self.data_normalization_bridge.normalize_state_action(input_data)
-                with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     pred_actions = policy.predict(obs=input_data, noise=None)
 
                 # blend_steps = max(1, min(input_data['est_delay'], 
