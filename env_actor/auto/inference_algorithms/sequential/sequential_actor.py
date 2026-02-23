@@ -5,12 +5,15 @@ Orchestrates the main control loop for sequential inference.
 Simple orchestration: Controller -> DataManager -> Policy -> DataManager -> Controller
 """
 
+
+import ray
+
 import time
 import torch
 import numpy as np
-import ray
 
-
+from env_actor.policy.utils.loader import build_policy
+from env_actor.policy.utils.weight_transfer import load_state_dict_cpu_into_module
 
 @ray.remote(num_gpus=1)
 class SequentialActor:
@@ -30,12 +33,13 @@ class SequentialActor:
     - Orchestration (no processing logic)
     """
 
+
     def __init__(
         self,
-        runtime_params,
+        inference_runtime_params_config,
         inference_runtime_topics_config,
         robot,
-        policy_yaml_path
+        policy_yaml_path,
     ):
         """
         Initialize sequential inference engine.
@@ -46,21 +50,30 @@ class SequentialActor:
             robot: str ("igris_b" or "igris_c")
             policy_yaml_path: str file path to policy yaml file.
         """
-        from env_actor.auto.io_interface.controller_interface import ControllerInterface
+        from env_actor.robot_io_interface.controller_interface import ControllerInterface
         from .data_manager.data_manager_interface import DataManagerInterface
-        from env_actor.policy.utils.loader import build_policy
-
+        from env_actor.nom_stats_manager.data_normalization_interface import DataNormalizationInterface
+        
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.policy = build_policy(policy_yaml_path=policy_yaml_path, map_location=self.device)
-        self.controller_interface = ControllerInterface(runtime_params=runtime_params, 
+        self.robot = robot
+        # Load robot-specific RuntimeParams
+        if self.robot == "igris_b":
+            from env_actor.runtime_settings_configs.robots.igris_b.inference_runtime_params import RuntimeParams
+        elif self.robot == "igris_c":
+            from env_actor.runtime_settings_configs.robots.igris_c.inference_runtime_params import RuntimeParams
+        else:
+            raise ValueError(f"Unknown robot: {self.robot}")
+        self.runtime_params = RuntimeParams(inference_runtime_params_config)
+        self.policy = build_policy(policy_yaml_path=policy_yaml_path, map_location="cpu").to(self.device)
+        self.policy.eval()
+        self.controller_interface = ControllerInterface(runtime_params=self.runtime_params, 
                                                         inference_runtime_topics_config=inference_runtime_topics_config,
                                                         robot=robot)
-        self.data_manager_interface = DataManagerInterface(runtime_params=runtime_params, robot=robot)
+        self.data_manager_interface = DataManagerInterface(runtime_params=self.runtime_params, robot=robot)
+        self.data_normalization_interface = DataNormalizationInterface(robot=robot, data_stats=self.runtime_params.read_stats_file())
 
     def start(self) -> None:
         # 2. Start state readers (cameras and proprioception)
-        torch.backends.cudnn.benchmark = True
-        torch.set_float32_matmul_precision("high")
         print("Starting state readers...")
         self.controller_interface.start_state_readers()
 
@@ -68,77 +81,74 @@ class SequentialActor:
         # rate controller should probably be replaced with using DT since we don't know if it will be used in Igris-C control.
         # rate_controller = self.controller_interface.recorder_rate_controller()
         DT = self.controller_interface.DT
-        rate_controller = self.controller_interface.recorder_rate_controller()
+        
         episode = -1
-        try:
-            while True:
-                print("Initializing robot position...")
-                prev_joint = self.controller_interface.init_robot_position()
-                time.sleep(0.5)
-                
-                self.data_manager_interface.update_prev_joint(prev_joint)
 
-                print("Bootstrapping observation history...")
-                initial_state = self.controller_interface.read_state()
-                print("Data manager interface is ready pre...")
-                self.data_manager_interface.init_inference_obs_state_buffer(initial_state)
-                print("Data manager interface is ready...")
-                next_t = time.perf_counter()
+        # Warm up CUDA (once, outside all loops)
+        print("Warming up CUDA kernels...")
+        with torch.no_grad():
+            try:
+                self.policy.warmup()
+            except Exception as e:
+                print(f"Warmup encountered error (may be expected for minimal inputs): {e}")
 
-                # 5. Main control loop
-                for t in range(9000):
-                    rate_controller.sleep()
-                    # Rate-limit to maintain target HZ
-                    # rate_controller.sleep()
+        while True:
+            print("Initializing robot position...")
+            prev_joint = self.controller_interface.init_robot_position()
+            time.sleep(0.5)
 
-                    # a. Read latest observations (raw from robot)
-                    obs_data = self.controller_interface.read_state()
+            print("Bootstrapping observation history...")
+            initial_state = self.controller_interface.read_state()
 
-                    if 'proprio' not in obs_data:
-                        print(f"Warning: No proprio data at step {t}, skipping...")
-                        continue
+            self.data_manager_interface.init_inference_obs_state_buffer(initial_state)
 
-                    # b. Update observation history in data manager
-                    self.data_manager_interface.update_state_history(obs_data)
+            next_t = time.perf_counter()
 
-                    # c. Conditionally run policy
-                    if (t % self.controller_interface.policy_update_period) == 0 or t == 0:
-                        # Get normalized observations from data manager
-                        normalized_obs = self.data_manager_interface.serve_normalized_obs_state(self.device)
+            # 5. Main control loop
+            for t in range(9000):
 
-                        # Generate noise in data manager
-                        noise = self.data_manager_interface.generate_noise(self.device)
+                # a. Read latest observations (raw from robot)
+                obs_data = self.controller_interface.read_state()
 
-                        # Add noise to observation dict for policy
-                        normalized_obs['noise'] = noise
+                if 'proprio' not in obs_data:
+                    print(f"Warning: No proprio data at step {t}, skipping...")
+                    continue
 
-                        # Run policy forward pass (just neural network)
-                        with torch.inference_mode() and torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                            policy_output = self.policy.predict(normalized_obs)
+                # b. Update observation history in data manager
+                self.data_manager_interface.update_state_history(obs_data)
 
-                        # Denormalize and buffer action in data manager
-                        self.data_manager_interface.buffer_action_chunk(policy_output, t)
+                # c. Conditionally run policy
+                if (t % self.controller_interface.policy_update_period) == 0:
+                    # Get observations from data manager
+                    obs = self.data_manager_interface.serve_raw_obs_state()
 
-                    # d. Get current action from data manager (already denormalized)
-                    action = self.data_manager_interface.get_current_action(t)
+                    # Run policy forward pass (just neural network)
+                    # Normalize inside the policy
+                    policy_output = self.policy.predict(obs, self.data_normalization_interface)
 
-                    # e. Publish action to robot (includes slew-rate limiting)
-                    smoothed_joints, fingers = self.controller_interface.publish_action(
-                                                                            action,
-                                                                            self.data_manager_interface.prev_joint
-                                                                        )
+                    denormalized_policy_output = self.data_normalization_interface.denormalize_action(policy_output)
 
-                    # f. Update previous joint state in data manager
-                    self.data_manager_interface.update_prev_joint(smoothed_joints)
+                    # Buffer denormalized action in data manager
+                    self.data_manager_interface.buffer_action_chunk(denormalized_policy_output, t)
 
-                    # g. Maintain precise loop timing
-                    next_t += DT
-                    sleep_time = next_t - time.perf_counter()
-                    if sleep_time > 0.0:
-                        time.sleep(sleep_time)
+                # d. Get current action from data manager (already denormalized)
+                action = self.data_manager_interface.get_current_action(t)
 
-                print("Episode finished !!")
+                # e. Publish action to robot (includes slew-rate limiting)
+                smoothed_joints, fingers = self.controller_interface.publish_action(
+                                                                        action,
+                                                                        prev_joint
+                                                                    )
 
-                episode += 1
-        finally:
-            self.controller_interface.shutdown()
+                # f. Update previous joint state in data manager
+                prev_joint = smoothed_joints
+
+                # g. Maintain precise loop timing
+                next_t += DT
+                sleep_time = next_t - time.perf_counter()
+                if sleep_time > 0.0:
+                    time.sleep(sleep_time)
+
+            print("Episode finished !!")
+
+            episode += 1

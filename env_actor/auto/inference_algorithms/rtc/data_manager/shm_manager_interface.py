@@ -1,7 +1,6 @@
-
 from __future__ import annotations
 
-from env_actor.auto.inference_algorithms.rtc.data_manager.utils.utils import ShmArraySpec
+from env_actor.auto.inference_algorithms.rtc.data_manager.utils.shared_memory_utils import ShmArraySpec
 from typing import TYPE_CHECKING
 from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import Value
@@ -11,6 +10,7 @@ import numpy as np
 from multiprocessing.synchronize import Condition as ConditionType
 from multiprocessing.synchronize import Event as EventType
 from multiprocessing.synchronize import RLock as RLockType
+
 
 
 class SharedMemoryInterface:
@@ -26,9 +26,9 @@ class SharedMemoryInterface:
                  inference_ready_flag: Value,
                  is_creator: bool = False,):
         if robot == "igris_b":
-            from .igris_b.shm_manager_bridge import SharedMemoryManager
+            from env_actor.auto.inference_algorithms.rtc.data_manager.robots.igris_b.shm_manager_bridge import SharedMemoryManager
         elif robot == "igris_c":
-            from .igris_c.shm_manager_bridge import SharedMemoryManager
+            from env_actor.auto.inference_algorithms.rtc.data_manager.robots.igris_c.shm_manager_bridge import SharedMemoryManager
         self.shm_manager = SharedMemoryManager.attach_from_specs(
             shm_specs=shm_specs,
             lock=lock,
