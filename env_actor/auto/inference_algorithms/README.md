@@ -1,245 +1,119 @@
-# Sequential Inference Engine - Refactoring Summary
+# Inference Algorithms
 
-## Overview
+Two inference algorithms that orchestrate the end-to-end control loop. Both are implemented as Ray remote actors and share the same policy, controller, and normalization interfaces.
 
-Successfully refactored the standalone `inference_engine` sequential inference into `online_rl/env_actor/` with a modular, robot-agnostic architecture.
+## Algorithm Comparison
+
+| Aspect | Sequential | RTC (Real-Time Control) |
+|---|---|---|
+| **Architecture** | Single-threaded, synchronous | Dual-process with shared memory |
+| **Policy method** | `predict()` | `guided_inference()` (with action inpainting) |
+| **Ray actor** | `SequentialActor` | `RTCActor` |
+| **Resources** | CPU only | 3 CPUs + 1 GPU |
+| **Use case** | Debugging, testing | Real-time robot deployment |
+| **Action transitions** | Hard switch between chunks | Smooth blending via inpainting weights |
+
+## Sequential Algorithm
+
+**Location:** `sequential/`
+
+Single-threaded control loop. The policy runs synchronously — the control loop blocks during inference.
+
+```
+sequential/
+├── sequential_actor.py                  # Ray remote actor (entrypoint)
+└── data_manager/
+    ├── data_manager_interface.py        # Factory for robot-specific data managers
+    └── robots/
+        ├── igris_b/data_manager_bridge.py
+        └── igris_c/                     # Stub
+```
+
+**Key files:**
+- `sequential_actor.py` — Ray actor that calls `start()` to begin the loop. Loads policy, creates controller, runs at configured HZ. Policy inference happens every `policy_update_period` steps.
+- `data_manager_interface.py` — Factory that creates robot-specific data managers based on the `robot` string.
+
+**Control loop logic:**
+1. Controller reads state (proprio + images)
+2. Data manager updates observation history buffers
+3. Every N steps: `policy.predict(obs)` returns an action chunk
+4. Data manager buffers the chunk and returns the current action via simple indexing (`action = chunk[offset]`)
+5. Controller publishes the action with slew-rate limiting
+
+## RTC Algorithm
+
+**Location:** `rtc/`
+
+Dual-process architecture where control and inference run concurrently, communicating via shared memory. This allows the robot to continue executing actions from the previous chunk while the policy computes the next one.
+
+```
+rtc/
+├── rtc_actor.py                         # Ray remote actor (creates both processes)
+├── actors/
+│   ├── control_loop.py                  # Process 1: 20 Hz robot control
+│   └── inference_loop.py               # Process 2: policy inference
+└── data_manager/
+    ├── shm_manager_interface.py         # Factory for shared memory managers
+    ├── utils/                           # Shared memory utilities
+    └── robots/
+        ├── igris_b/shm_manager_bridge.py
+        └── igris_c/                     # Stub
+```
+
+**Key files:**
+- `rtc_actor.py` — Creates both processes and the shared memory manager. Calls `start()` to launch.
+- `control_loop.py` — Runs at the configured HZ. Reads robot state, writes to shared memory, reads actions from shared memory, publishes to robot.
+- `inference_loop.py` — Waits for a minimum number of actions to be executed, then calls `policy.guided_inference()`. Writes the new action chunk to shared memory.
+- `shm_manager_bridge.py` — Manages shared memory arrays and synchronization primitives.
+
+**Synchronization primitives:**
+- `RLock` — protects shared memory reads/writes
+- `Condition` (2) — `control_iter_cond` signals the inference loop; `inference_ready_cond` signals the control loop
+- `Event` (2) — `stop_event` for shutdown; `episode_complete_event` for episode boundaries
+- `Value` — `num_control_iters` counter; `inference_ready_flag` boolean
+
+**Shared memory layout** (IGRIS_B defaults):
+
+| Key | Shape | Dtype |
+|---|---|---|
+| `proprio` | `(1, 24)` | float32 |
+| `head` | `(1, 3, 240, 320)` | uint8 |
+| `left` | `(1, 3, 240, 320)` | uint8 |
+| `right` | `(1, 3, 240, 320)` | uint8 |
+| `action` | `(50, 24)` | float32 |
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  ALGORITHM LAYER (Robot-Agnostic)                  │
-│  sequential_engine.py - Main control loop           │
-└─────────────────────────────────────────────────────┘
-                         ↓
-┌─────────────────────────────────────────────────────┐
-│  PROCESSING LAYER (Shared Transformations)         │
-│  - observation_processor.py                         │
-│  - action_processor.py                              │
-│  - policy_manager.py                                │
-│  - config_manager.py                                │
-└─────────────────────────────────────────────────────┘
-                         ↓
-┌─────────────────────────────────────────────────────┐
-│  ROBOT I/O LAYER (Hardware-Specific Bridges)       │
-│  - controller_bridge.py (igris_b, igris_c)          │
-│  - data_manager_bridge.py (igris_b, igris_c)        │
+│  ALGORITHM LAYER (Robot-Agnostic)                   │
+│  SequentialActor / RTCActor - Control orchestration  │
+└────────────────────────┬────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────┐
+│  INTERFACE LAYER                                    │
+│  build_policy()        → Policy inference           │
+│  ControllerInterface   → Robot I/O                  │
+│  DataNormalization     → State/action transforms    │
+│  DataManager           → History + action buffering │
 └─────────────────────────────────────────────────────┘
 ```
 
-## What Was Implemented
+## Design Decisions
 
-### Phase 1: Processing Layer (NEW)
-✅ **shared/observation_processor.py**
-- Manages observation history buffers (proprio + images)
-- Normalizes observations using policy stats
-- Handles image observation cadence
+- **No temporal ensemble** — action selection uses simple indexing (`action = chunk[offset]`) rather than weighted averaging across overlapping chunks
+- **No human-in-the-loop gating** — actors start immediately when `start()` is called
+- **Factory pattern for robot bridges** — robot-specific code is isolated; algorithms are robot-agnostic
+- **Duck-typing** — bridge classes satisfy interfaces via structural subtyping, not inheritance
 
-✅ **shared/action_processor.py**
-- Denormalizes policy outputs
-- Buffers action chunks
-- Simple indexing strategy (temporal ensemble removed as requested)
+## Adding a New Algorithm
 
-✅ **shared/policy_manager.py**
-- Loads policy using inference_engine's policy loader
-- Executes inference with autocast
-- Manages device placement
-
-✅ **shared/config_manager.py**
-- Unified configuration handling
-- Bridges between config schemas
-- Supports both inference_engine and env_actor formats
-
-### Phase 2: IGRIS_B Bug Fixes
-✅ **Fixed controller_bridge.py bugs:**
-- Line 129: Fixed camera selection logic (`if cam_name in ['head', 'right']`)
-- Simplified `_obs_dict_to_np_array()` to use IGRIS_B_STATE_KEYS directly
-- Removed dependency on undefined `config` variable
-
-✅ **Fixed data_manager_bridge.py bugs:**
-- Lines 39-40: Added `pass` statements to empty methods
-- Lines 69-91: Completely rewrote normalization logic using proper stats
-- Implemented `denormalize_action()` method
-- Implemented `serve_normalized_obs_state()` with correct device handling
-
-### Phase 3: Sequential Engine (NEW)
-✅ **sequential_engine.py**
-- Robot-agnostic control loop
-- Policy update scheduling
-- Orchestrates all interfaces
-- NO manual gating (excluded as requested)
-- NO temporal ensemble (removed as requested)
-
-✅ **sequential_runner.py**
-- Standalone test script for debugging
-- Direct instantiation (no Ray)
-- Command-line interface for easy testing
-
-### Phase 4: IGRIS_C Interface Design
-✅ **Complete interface stubs created:**
-- [README.md](auto/io_interface/igris_c/README.md) - Comprehensive documentation
-- init_params.py - Skeleton with TODOs
-- controller_bridge.py - Interface stub (generic, no assumptions)
-- data_manager_bridge.py - Interface stub
-- Implementation deferred until hardware specs available
-
-## Key Design Decisions
-
-### 1. Temporal Ensemble: REMOVED
-- Simplified action_processor to use only indexing
-- Reduced complexity as requested
-- Action selection: `action = action_chunk[offset]`
-
-### 2. Human-in-the-Loop: EXCLUDED
-- Removed manual gate (`input("Press any key...")`)
-- Automatic start with no user intervention
-
-### 3. Robot Abstraction
-- Factory pattern with string-based selection
-- Duck-typing (no base classes)
-- Robot-specific code isolated to bridges
-
-### 4. Modularity for RTC Reuse
-Shared components ready for RTC:
-- observation_processor.py (same normalization)
-- policy_manager.py (same policy loading)
-- controller_bridge.py (same I/O)
-- data_manager_bridge.py (same data management)
-
-## Usage
-
-### Running Sequential Inference (Standalone)
-
-```bash
-cd /home/user/Projects/online_rl
-
-python -m env_actor.auto.inference_algorithms.sequential.sequential_runner \
-  --runtime_config path/to/runtime_config.json \
-  --model_config path/to/model_config.yaml \
-  --policy_config path/to/policy_config.yaml \
-  --checkpoint path/to/checkpoint_dir \
-  --robot igris_b \
-  --device cuda
-```
-
-### Configuration Format
-
-Extend your existing `inference_runtime_settings.json`:
-
-```json
-{
-  "robot_id": "packy",
-  "HZ": 20,
-  "policy_update_period": 40,
-  "sequential": {
-    "max_timesteps": 1000,
-    "max_delta": 0.01
-  },
-  "camera_names": ["head", "left", "right"],
-  "proprio_state_dim": 48,
-  "action_dim": 24,
-  "norm_stats_file_path": "/path/to/stats.pkl"
-}
-```
-
-## File Structure
-
-```
-online_rl/env_actor/
-├── auto/
-│   ├── inference_algorithms/
-│   │   ├── shared/                        # NEW: Reusable components
-│   │   │   ├── observation_processor.py
-│   │   │   ├── action_processor.py
-│   │   │   ├── policy_manager.py
-│   │   │   └── config_manager.py
-│   │   │
-│   │   └── sequential/                    # NEW: Sequential algorithm
-│   │       ├── sequential_engine.py
-│   │       └── sequential_runner.py
-│   │
-│   ├── io_interface/
-│   │   └── igris_b/
-│   │       └── controller_bridge.py       # FIXED bugs
-│   │
-│   └── data_manager/
-│       └── igris_b/
-│           └── data_manager_bridge.py     # FIXED bugs
-│
-└── runtime_settings_configs/
-    └── igris_b/
-        └── inference_runtime_settings.json # EXTEND for sequential
-```
-
-## Next Steps
-
-### For IGRIS_B (Ready to Test)
-1. Extend `inference_runtime_settings.json` with sequential params
-2. Test with standalone runner: `sequential_runner.py`
-3. Validate behavioral equivalence with original sequential_inference.py
-4. Integrate with Ray actor (sequential_actor.py) if needed
-
-### For IGRIS_C (Interface Design Complete)
-1. Determine hardware specifications (see igris_c/README.md)
-2. Implement controller_bridge.py based on communication protocol
-3. Implement data_manager_bridge.py with correct state dimensions
-4. Create runtime configuration
-5. Test with sequential_runner.py
-
-### For RTC Integration
-1. Adapt shared components for multiprocessing
-2. Integrate with existing action_inpainting.py
-3. Use same controller/data manager bridges
-4. Implement RTC-specific temporal logic
-
-## Testing
-
-### Unit Tests (Recommended)
-- Test observation normalization math
-- Test action denormalization
-- Test config loading and validation
-
-### Integration Tests
-- Test controller_bridge I/O with mock ROS2
-- Test data_manager history management
-- Test sequential_engine control loop
-
-### End-to-End Tests
-- Run sequential_runner.py with real robot (if available)
-- Compare actions with original sequential_inference.py
-- Verify 20 Hz control frequency
-
-## Migration from Original
-
-To migrate from standalone `sequential_inference.py`:
-
-| Original | Refactored |
-|----------|------------|
-| `inference_engine/engine/algorithms/sequential/sequential_inference.py` | `env_actor/auto/inference_algorithms/sequential/sequential_runner.py` |
-| Monolithic script | Modular components |
-| Hardcoded IGRIS_B logic | Robot-agnostic with bridges |
-| Temporal ensemble included | Removed for simplicity |
-| Manual gate included | Excluded for automation |
-
-## Architecture Benefits
-
-1. **Modularity**: Shared components reusable across algorithms
-2. **Robot Abstraction**: Easy to add new robots (igris_c ready)
-3. **Testability**: Standalone runner for debugging without Ray
-4. **Maintainability**: Clear separation of concerns
-5. **Extensibility**: RTC can reuse processing layer
-
-## Known Limitations
-
-1. Policy loading still uses inference_engine's build_policy (not env_actor's)
-   - TODO: Harmonize policy systems in future
-2. IGRIS_C implementation pending hardware specs
-3. Ray actor integration (sequential_actor.py) not yet refactored
-4. No unit tests written yet (recommended next step)
-
-## References
-
-- Original implementation: `inference_engine/engine/algorithms/sequential/sequential_inference.py`
-- IGRIS_B reference: `env_actor/auto/io_interface/igris_b/`
-- IGRIS_C interface: `env_actor/auto/io_interface/igris_c/README.md`
-- Plan document: `/home/user/.claude/plans/zesty-inventing-mountain.md`
+1. Create a directory under `inference_algorithms/your_algorithm/`
+2. Implement a Ray remote actor class with a `start()` method
+3. Create robot-specific data manager bridges under `data_manager/robots/`
+4. The actor must:
+   - Load the policy via `build_policy()`
+   - Create a `ControllerInterface` for the target robot
+   - Create a `DataNormalizationInterface` for normalization
+   - Run a control loop that reads state, runs inference, and publishes actions
+5. Update `run_inference.py` to add the new algorithm name to `--inference_algorithm` choices
