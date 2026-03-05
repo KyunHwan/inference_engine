@@ -24,15 +24,15 @@ class RTCActor:
     def start(self):
         import multiprocessing as mp
         from multiprocessing import resource_tracker
-        from env_actor.auto.inference_algorithms.rtc.data_manager.utils.shared_memory_utils import create_shared_ndarray
-        from .actors.control_loop import start_control
-        from .actors.inference_loop import start_inference
+        from .env_actor.auto.inference_algorithms.rtc.data_manager.utils.shared_memory_utils import create_shared_ndarray
+        from .env_actor.actors.control_loop import start_control
+        from .env_actor.actors.inference_loop import start_inference
 
         # Load robot-specific RuntimeParams
         if self.robot == "igris_b":
-            from env_actor.runtime_settings_configs.robots.igris_b.inference_runtime_params import RuntimeParams
+            from .env_actor.runtime_settings_configs.robots.igris_b.inference_runtime_params import RuntimeParams
         elif self.robot == "igris_c":
-            from env_actor.runtime_settings_configs.robots.igris_c.inference_runtime_params import RuntimeParams
+            from .env_actor.runtime_settings_configs.robots.igris_c.inference_runtime_params import RuntimeParams
         else:
             raise ValueError(f"Unknown robot: {self.robot}")
 
