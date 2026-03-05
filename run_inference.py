@@ -25,7 +25,7 @@ cam_images_dtype = np.uint8
 action_chunk_dtype = np.float32
 
 
-def start_openpi_inference(
+def start_inference(
     policy_yaml_path,
     robot,
     inference_runtime_params_config,
@@ -35,10 +35,13 @@ def start_openpi_inference(
     # Initialize Ray
     if ray.is_initialized():
         ray.shutdown()
-    ray.init(address="auto", 
-             namespace="inference_engine", 
+    ray.init(address="auto",
+             namespace="inference_engine",
              log_to_driver=True,
-             runtime_env={"env_vars": {"PYTHONPATH": os.path.dirname(os.path.abspath(__file__))}})
+             runtime_env={
+                 "working_dir": os.path.dirname(os.path.abspath(__file__)),
+                 "excludes": [".venv/", ".git/", "__pycache__/", "*.pyc", "*.pyo"]
+             })
 
     if isinstance(inference_runtime_topics_config, str):
         with open(inference_runtime_topics_config, 'r') as f:
@@ -110,7 +113,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    start_openpi_inference(
+    start_inference(
         policy_yaml_path=args.policy_yaml_path,
         robot=args.robot,
         inference_runtime_params_config=args.inference_runtime_params_config,
