@@ -86,10 +86,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run openpi inference via build_policy()")
     parser.add_argument(
         "--policy_yaml_path", "-P", type=str,
-        default="./env_actor/policy/policies/openpi_policy/openpi_policy.yaml",
+        default="./env_actor/policy/policies/dsrl_openpi_policy/dsrl_openpi_policy.yaml",
         help="Path to policy YAML config (ckpt_dir and default_prompt are set in the component YAML)",
     )
-    parser.add_argument("--robot", required=True, choices=["igris_b", "igris_c"])
+    parser.add_argument("--robot", default="igris_b", choices=["igris_b", "igris_c"])
     parser.add_argument(
         "--inference_runtime_params_config",
         default="./env_actor/runtime_settings_configs/igris_b/inference_runtime_params.json",
