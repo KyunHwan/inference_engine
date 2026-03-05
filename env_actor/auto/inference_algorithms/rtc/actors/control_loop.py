@@ -67,7 +67,7 @@ def start_control(
     )
 
     # Episode configuration
-    episode_length = 1000  # Control steps per episode
+    episode_length = 1200  # Control steps per episode
 
     try:
         print("Starting state readers...")
@@ -123,16 +123,17 @@ def start_control(
                 if "proprio" not in obs_data:
                     print(f"Warning: No proprio data at step {t}, skipping...")
                     continue
-
+                
+                
                 # e. Update SharedMemory (atomic write + increment, direct call)
                 action = shm_manager.atomic_write_obs_and_increment_get_action(obs=obs_data, 
                                                                                     action_chunk_size=runtime_params.action_chunk_size)
+                if t > 60:
+                    # h. Publish action to robot (includes slew-rate limiting)
+                    smoothed_joints, fingers = controller_interface.publish_action(action, prev_joint)
 
-                # h. Publish action to robot (includes slew-rate limiting)
-                smoothed_joints, fingers = controller_interface.publish_action(action, prev_joint)
-
-                # j. Update previous joint state
-                prev_joint = smoothed_joints
+                    # j. Update previous joint state
+                    prev_joint = smoothed_joints
 
                 # k. Maintain precise loop timing
                 next_t += controller_interface.DT
