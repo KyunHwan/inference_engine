@@ -35,7 +35,10 @@ def start_openpi_inference(
     # Initialize Ray
     if ray.is_initialized():
         ray.shutdown()
-    ray.init(address="auto", namespace="inference_engine", log_to_driver=True)
+    ray.init(address="auto", 
+             namespace="inference_engine", 
+             log_to_driver=True,
+             runtime_env={"env_vars": {"PYTHONPATH": os.path.dirname(os.path.abspath(__file__))}})
 
     if isinstance(inference_runtime_topics_config, str):
         with open(inference_runtime_topics_config, 'r') as f:
