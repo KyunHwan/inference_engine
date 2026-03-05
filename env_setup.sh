@@ -6,6 +6,7 @@ uv pip install flow_matching
 uv pip install schedulefree
 uv pip install geomloss
 uv pip install numpy
+uv pip install opencv-python
 uv pip install einops
 uv pip install timm
 uv pip install transformers==4.53.2
@@ -29,3 +30,6 @@ uv pip install av
 uv pip install tyro
 uv pip install ml_collections
 uv pip install gcsfs
+
+echo "Setting up Depth Anything v3 as submodule"
+uv pip install -e ./trainer/policy_constructor/model_constructor/blocks/experiments/backbones/vision/externals/depth_anything_3
