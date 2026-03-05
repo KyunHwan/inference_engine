@@ -22,6 +22,10 @@ class RTCActor:
         self.inference_runtime_topics_config = inference_runtime_topics_config
     
     def start(self):
+        import sys, pathlib
+        _project_root = str(pathlib.Path(__file__).resolve().parents[4])
+        if _project_root not in sys.path:
+            sys.path.insert(0, _project_root)
         import multiprocessing as mp
         from multiprocessing import resource_tracker
         from env_actor.auto.inference_algorithms.rtc.data_manager.utils.shared_memory_utils import create_shared_ndarray
