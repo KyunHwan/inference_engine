@@ -1,7 +1,7 @@
 """DSRL + OpenPI policy for env_actor inference.
 
 Wires four trained components into the Policy protocol:
-  1. backbone (RadioV3)                       — raw images → spatial features
+  1. backbone (Resnet34Group)                   — raw images → spatial features
   2. noise_processor (NoiseActorImgDepthProprioProcessor) — features + proprio → flat latent
   3. noise_actor (Noise_Latent_Actor)         — flat latent → structured noise
   4. openpi_model (OpenPiBatchedWrapper)      — images + proprio + noise → action chunk
@@ -93,14 +93,10 @@ class DsrlOpenpiPolicy:
                 )  # (1, 3, H, W)
 
         # 3. Backbone: raw images → spatial feature maps.
-        #    backbone GraphModel input name: "image"
-        #    backbone returns (features, summary); we need features → (1, 1024, H', W')
-        feat: dict[str, torch.Tensor] = {}
+        #    backbone GraphModel input name: "images"
+        #    Resnet34Group returns dict of {cam: (1, 512, H', W')}
         with torch.no_grad():
-            for cam in _CAMERAS:
-                if cam in img_tensors:
-                    features, _ = self.components["backbone"](image=img_tensors[cam])
-                    feat[cam] = features  # (1, 1024, H', W')
+            feat = self.components["backbone"](images=img_tensors)
 
         # 4. Noise processor: features + normalized proprio → flat latent.
         #    noise_processor GraphModel input name: "data"
