@@ -125,7 +125,7 @@ class DsrlOpenpiPolicy:
 
         # openpi_model GraphModel inputs: [observation, noise]
         actions = self.components["openpi_model"](
-            observation=openpi_obs, noise=noise_np
+            observation=openpi_obs, noise=np.random.randn(*noise_np.shape).astype(np.float32)
         )  # (1, action_horizon, action_dim) tensor
 
         return actions[0].cpu().float().numpy()  # (action_horizon, action_dim)
