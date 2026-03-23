@@ -117,7 +117,7 @@ class DsrlOpenpiPolicy:
         }
         for cam in _CAMERAS:
             if cam in obs:
-                openpi_obs[cam] = obs[cam][-1:].astype(np.float32)  # (1, 3, H, W)
+                openpi_obs[cam] = obs[cam][-1:]  # (1, 3, H, W) keep original dtype
         if "prompt" in obs:
             openpi_obs["prompt"] = obs["prompt"]
 
