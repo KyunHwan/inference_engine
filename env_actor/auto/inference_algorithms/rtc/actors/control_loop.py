@@ -98,21 +98,24 @@ def start_control(
             episode += 1
             print(f"Starting episode {episode}...")
 
-            # Reset robot position
+            # Reset inference loop conditions and variables
             print("Initializing robot position...")
+            shm_manager.reset()
+            time.sleep(1.5)
+
+            # Reset robot position
             prev_joint = controller_interface.init_robot_position()
             time.sleep(0.5)
 
-            # Reset SharedMemoryManager for new episode (direct call, no Ray)
-            shm_manager.reset()
-            shm_manager.init_action_chunk()
-            shm_manager.bootstrap_obs_history(obs_history=controller_interface.read_state())
+            # Reset SharedMemoryManager for new episode (direct call, no Ray) 
+            shm_manager.init_action_chunk_obs_history(obs_history=controller_interface.read_state())
+            # shm_manager.bootstrap_obs_history(obs_history=controller_interface.read_state())
+            # shm_manager.init_action_chunk()
 
             # Main control loop for episode
             next_t = time.perf_counter()
             print("Control loop started...")
             for t in range(episode_length):
-                print(f"step {t}")
                 # Check stop event
                 if shm_manager.stop_event_is_set():
                     print("Stop event received during episode, exiting")
