@@ -1,0 +1,5 @@
+{
+  "robot_id": "igris_c_robot1",
+  "HZ": 20,
+  "_note": "DDS topics live in inference_runtime_params.json's dds.topics block; igris_c does not use ROS2."
+}

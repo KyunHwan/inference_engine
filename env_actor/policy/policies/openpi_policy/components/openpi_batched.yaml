@@ -4,7 +4,7 @@ params:
   train_config_name: "pi05_igris"
   ckpt_dir: "/home/robros/Projects/robros_vla_inference_engine/openpi_film/checkpoints/pi05_igris/pi05_igris_b_pnp_v3.3.2/film_15000"
   default_prompt: "Pick up objects on the table with the left hand and place them into the box."
-  action_dim: 24
+  action_dim: 17
   action_horizon: 50
   num_inference_steps: 10
   gradient_checkpointing: false

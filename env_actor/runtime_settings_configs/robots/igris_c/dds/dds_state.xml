@@ -1,0 +1,22 @@
+<!--
+  Cyclone DDS config for IGRIS-C state/cmd domain (sensor traffic).
+  Domain 0: rt/lowstate, rt/handstate (in)  +  rt/lowcmd, rt/handcmd (out)
+
+  TODO(deploy): set NetworkInterface name to the NIC physically cabled to
+  the NUC's 192.168.10.0/24 subnet. On the fixer_record reference host this
+  is enp11s0; on this dev box it would be enp209s0f1np1 (or whichever NIC
+  has the 192.168.10.x IP).
+
+  Verify: `ip addr show <iface>` shows 192.168.10.x/24
+          `ping 192.168.10.1` reaches the NUC
+          `ip route | grep 224` shows multicast route on this iface
+-->
+<CycloneDDS>
+    <Domain id="0">
+        <General>
+            <Interfaces>
+                <NetworkInterface name="enp11s0" autodetermine="false"/>
+            </Interfaces>
+        </General>
+    </Domain>
+</CycloneDDS>

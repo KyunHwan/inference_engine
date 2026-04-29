@@ -1,0 +1,55 @@
+{
+  "HZ": 20,
+  "max_delta_deg": 5,
+  "policy_update_period": 50,
+  "mono_image_resize": {
+    "width": 320,
+    "height": 240
+  },
+  "camera_names": ["head", "left", "right"],
+  "proprio_state_dim": 86,
+  "action_dim": 17,
+  "action_chunk_size": 50,
+  "proprio_history_size": 50,
+  "num_img_obs": 1,
+  "img_obs_every": 1,
+  "norm_stats_file_path": "/home/robros/Projects/inference_engine/trainer/experiment_training/igris_c/dataset_stats.pkl",
+  "dds": {
+    "namespace": "",
+    "state_domain_id": 0,
+    "camera_domain_id": 1,
+    "state_dds_xml": "file:///home/user/Projects/inference_engine/env_actor/runtime_settings_configs/robots/igris_c/dds/dds_state.xml",
+    "camera_dds_xml": "file:///home/user/Projects/inference_engine/env_actor/runtime_settings_configs/robots/igris_c/dds/dds_camera.xml",
+    "topics": {
+      "lowstate": "rt/lowstate",
+      "handstate": "rt/handstate",
+      "lowcmd": "rt/lowcmd",
+      "handcmd": "rt/handcmd",
+      "head_camera": "igris_c/sensor/eyes_stereo",
+      "left_camera": "igris_c/sensor/left_hand",
+      "right_camera": "igris_c/sensor/right_hand"
+    },
+    "init_robot_at_startup": false,
+    "joint_gains": {
+      "_doc": "Per-motor kp/kd; 0-based. Defaults match igris_c_fixer_record masterarm freemode.",
+      "kp": [
+        200.0, 200.0, 200.0,
+        500.0, 200.0,  50.0, 500.0, 300.0, 300.0,
+        500.0, 200.0,  50.0, 500.0, 300.0, 300.0,
+         75.0, 200.0,  45.0,  45.0,   5.0,   5.0,   5.0,
+         75.0, 200.0,  45.0,  45.0,   5.0,   5.0,   5.0,
+          2.0,   5.0
+      ],
+      "kd": [
+        15.0, 15.0, 15.0,
+         3.0,  0.5,  0.5,  3.0,  1.5,  1.5,
+         3.0,  0.5,  0.5,  3.0,  1.5,  1.5,
+         0.75, 2.0, 0.225, 0.225, 0.1, 0.1, 0.1,
+         0.75, 2.0, 0.225, 0.225, 0.1, 0.1, 0.1,
+         0.05, 0.1
+      ],
+      "hand_kp": 50.0,
+      "hand_kd": 2.0
+    }
+  }
+}

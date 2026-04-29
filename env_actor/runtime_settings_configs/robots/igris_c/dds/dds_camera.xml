@@ -1,0 +1,22 @@
+<!--
+  Cyclone DDS config for IGRIS-C camera domain.
+  Domain 1: igris_c/sensor/{eyes_stereo, left_hand, right_hand} from Jetson
+            (direct LAN — no NUC bridge).
+
+  If your operator setup uses the NUC route daemon to bridge cameras onto
+  WiFi (Domain 10), change <Domain id="1"> -> <Domain id="10"> AND set
+  camera_domain_id: 10 in inference_runtime_params.json.
+
+  TODO(deploy): set NetworkInterface name. For direct-LAN cameras this is
+  the same NIC as the state XML (cabled to the robot LAN). For the WiFi
+  bridge variant it would be the host's WiFi interface.
+-->
+<CycloneDDS>
+    <Domain id="1">
+        <General>
+            <Interfaces>
+                <NetworkInterface name="enp11s0" autodetermine="false"/>
+            </Interfaces>
+        </General>
+    </Domain>
+</CycloneDDS>
