@@ -81,12 +81,12 @@ if __name__ == "__main__":
     parser.add_argument("--robot", default="igris_b", choices=["igris_b", "igris_c"])
     parser.add_argument(
         "--inference_runtime_params_config",
-        default="./env_actor/runtime_settings_configs/robots/igris_b/inference_runtime_params.json",
+        default="./env_actor/runtime_settings_configs/robots/igris_c/inference_runtime_params.json",
         help="Path to inference runtime params JSON config",
     )
     parser.add_argument(
         "--inference_runtime_topics_config",
-        default="./env_actor/runtime_settings_configs/robots/igris_b/inference_runtime_topics.json",
+        default="./env_actor/runtime_settings_configs/robots/igris_c/inference_runtime_topics.json",
         help="Path to inference runtime topics config",
     )
     parser.add_argument("--inference_algorithm",

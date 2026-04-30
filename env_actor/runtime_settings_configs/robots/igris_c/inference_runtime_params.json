@@ -3,8 +3,8 @@
   "max_delta_deg": 5,
   "policy_update_period": 50,
   "mono_image_resize": {
-    "width": 320,
-    "height": 240
+    "width": 224,
+    "height": 224
   },
   "camera_names": ["head", "left", "right"],
   "proprio_state_dim": 86,
@@ -18,8 +18,8 @@
     "namespace": "",
     "state_domain_id": 0,
     "camera_domain_id": 1,
-    "state_dds_xml": "file:///home/user/Projects/inference_engine/env_actor/runtime_settings_configs/robots/igris_c/dds/dds_state.xml",
-    "camera_dds_xml": "file:///home/user/Projects/inference_engine/env_actor/runtime_settings_configs/robots/igris_c/dds/dds_camera.xml",
+    "state_dds_xml": "/home/robros/Projects/inference_engine/env_actor/runtime_settings_configs/robots/igris_c/dds/dds_state.xml",
+    "camera_dds_xml": "/home/robros/Projects/inference_engine/env_actor/runtime_settings_configs/robots/igris_c/dds/dds_camera.xml",
     "topics": {
       "lowstate": "rt/lowstate",
       "handstate": "rt/handstate",

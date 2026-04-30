@@ -20,7 +20,7 @@ def start_inference(
     import json
 
     from env_actor.nom_stats_manager.data_normalization_interface import DataNormalizationInterface
-    from env_actor.auto.inference_algorithms.rtc.data_manager.shm_manager_interface import SharedMemoryInterface
+    from ..data_manager.shm_manager_interface import SharedMemoryInterface
     from env_actor.policy.utils.weight_transfer import load_state_dict_cpu_into_module
     from env_actor.policy.utils.loader import build_policy
 

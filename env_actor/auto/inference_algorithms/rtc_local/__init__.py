@@ -4,8 +4,8 @@ Mirror of `rtc/` that runs the same two-process (control + inference)
 RTC pipeline on a single machine without a Ray cluster. The actor file
 and the two child-process entry points are mirrored locally with the
 ray import / ray.init() blocks removed; the SharedMemory data manager
-modules under `rtc/data_manager/` are reused via absolute imports
-(zero ray usage there).
+modules under `rtc_local/data_manager/` are local copies of those in
+`rtc/` (zero ray usage there).
 
 Components:
 - RTCLocalActor: spawn-context parent that allocates SharedMemory + sync

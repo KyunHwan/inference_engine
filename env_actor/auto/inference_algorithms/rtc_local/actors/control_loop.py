@@ -22,7 +22,7 @@ def start_control(
     import numpy as np
 
     from env_actor.robot_io_interface.controller_interface import ControllerInterface
-    from env_actor.auto.inference_algorithms.rtc.data_manager.shm_manager_interface import SharedMemoryInterface
+    from ..data_manager.shm_manager_interface import SharedMemoryInterface
 
     # Load robot-specific RuntimeParams
     if robot == "igris_b":
@@ -126,7 +126,7 @@ def start_control(
 
             # e. Update SharedMemory (atomic write + increment, direct call)
             action = shm_manager.atomic_write_obs_and_increment_get_action(obs=obs_data,
-                                                                                action_chunk_size=runtime_params.action_chunk_size)
+                                                                           action_chunk_size=runtime_params.action_chunk_size)
             if t > 100:
                 # h. Publish action to robot (includes slew-rate limiting)
                 smoothed_joints, fingers = controller_interface.publish_action(action, prev_joint)

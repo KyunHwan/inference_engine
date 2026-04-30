@@ -27,7 +27,7 @@ class RTCLocalActor:
             sys.path.insert(0, _project_root)
         import multiprocessing as mp
         from multiprocessing import resource_tracker
-        from env_actor.auto.inference_algorithms.rtc.data_manager.utils.shared_memory_utils import create_shared_ndarray
+        from env_actor.auto.inference_algorithms.rtc_local.data_manager.utils.shared_memory_utils import create_shared_ndarray
         from .actors.control_loop import start_control
         from .actors.inference_loop import start_inference
 
