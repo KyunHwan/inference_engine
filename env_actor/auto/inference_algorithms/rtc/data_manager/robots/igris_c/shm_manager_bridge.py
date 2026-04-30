@@ -79,7 +79,7 @@ class SharedMemoryManager:
         self._inference_ready_flag = inference_ready_flag
 
         self._delay_queue = MaxDeque(buffer_len=5)
-        self._delay_queue.add(5)
+        self._delay_queue.add(15)
 
     @classmethod
     def attach_from_specs(
@@ -270,7 +270,7 @@ class SharedMemoryManager:
         with self._lock:
             self._num_control_iters.value = 0
             self._delay_queue.clear()
-            self._delay_queue.add(5)
+            self._delay_queue.add(15)
 
     # =========================================================================
     # Lifecycle Methods

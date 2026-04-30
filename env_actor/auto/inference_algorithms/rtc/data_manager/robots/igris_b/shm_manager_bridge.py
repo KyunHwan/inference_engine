@@ -82,7 +82,7 @@ class SharedMemoryManager:
 
         # Delay tracking for guided inference
         self._delay_queue = MaxDeque(buffer_len=5)
-        self._delay_queue.add(5)  # Initial delay estimate
+        self._delay_queue.add(15)  # Initial delay estimate
 
     @classmethod
     def attach_from_specs(
@@ -402,7 +402,7 @@ class SharedMemoryManager:
         with self._lock:
             self._num_control_iters.value = 0
             self._delay_queue.clear()
-            self._delay_queue.add(5)  # Re-initialize with default delay
+            self._delay_queue.add(15)  # Re-initialize with default delay
 
     # =========================================================================
     # Lifecycle Methods

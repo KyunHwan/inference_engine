@@ -21,8 +21,9 @@ Action layout (action_dim=17): [left_arm_7, right_arm_7, left_hand_1, right_hand
 The single hand value is broadcast to all 6 finger motors per side. Body joints
 not in the action vector are held at HOME_POSE_RAD via per-motor kp/kd.
 
-See /home/user/.claude/plans/analyze-inference-engine-igris-c-sdk-igr-cached-dijkstra.md
-for the full design rationale.
+State and commands are in PJS (Parallel Joint Space) to match the recorder
+(igris_c_fixer_record/record/src/core/lowcmd_bridge.py). MS (Motor Space)
+is only used for tau_est, which the recorder also reads from motor_state.
 """
 
 import threading
@@ -97,10 +98,18 @@ class ControllerBridge:
             self._client = igc_sdk.IgrisC_Client()
             self._client.Init()
             self._client.SetTimeout(2.0)
-            self._client.InitBms(igc_sdk.BmsInitType.BMS_AND_MOTOR_INIT, 5000)
-            self._client.SetTorque(igc_sdk.TorqueType.TORQUE_ON, 5000)
-            self._client.SetControlMode(igc_sdk.ControlMode.CONTROL_MODE_LOW_LEVEL, 5000)
-            self._client.InitHand(5000)
+            # Sequential so a failed earlier call (e.g. InitBms) does not let a
+            # later one (e.g. SetTorque) fire on a robot that is not safe for it.
+            init_steps = (
+                ("InitBms",        lambda: self._client.InitBms(igc_sdk.BmsInitType.BMS_AND_MOTOR_INIT, 5000)),
+                ("SetTorque",      lambda: self._client.SetTorque(igc_sdk.TorqueType.TORQUE_ON, 5000)),
+                ("SetControlMode", lambda: self._client.SetControlMode(igc_sdk.ControlMode.CONTROL_MODE_LOW_LEVEL, 5000)),
+                ("InitHand",       lambda: self._client.InitHand(5000)),
+            )
+            for name, call in init_steps:
+                resp = call()
+                if not resp.success():
+                    raise RuntimeError(f"{name} failed: code={resp.error_code()} msg={resp.message()}")
         else:
             self._client = None
 
@@ -112,11 +121,36 @@ class ControllerBridge:
             "right": _Latest(),
         }
 
+        # NOTE: the pybind11-wrapped msg is a non-owning view into a Cyclone DDS
+        # LoanedSamples buffer; the loan is returned the instant the callback
+        # returns (see igris_c_sdk/include/igris_c_sdk/subscriber.hpp on_data_available).
+        # Storing the wrapper for later read = dangling pointer = UB. So we
+        # extract the fields we need into Python-owned numpy arrays / dicts
+        # right here, while the loan is still valid.
+        #
+        # Body q is read from joint_state (PJS) to match what the recorder
+        # writes to HDF5 and what the policy is trained on. tau_est is read
+        # from motor_state (the recorder does the same — see hdf5_writer.py).
+        def _on_low(msg):
+            js = msg.joint_state()
+            ms = msg.motor_state()
+            q = np.fromiter((js[i].q() for i in range(N_JOINTS)),
+                            dtype=np.float32, count=N_JOINTS)
+            tau = np.fromiter((ms[i].tau_est() for i in range(N_JOINTS)),
+                              dtype=np.float32, count=N_JOINTS)
+            self._latest_low.set((q, tau))
+
+        def _on_hand(msg):
+            seq = msg.motor_state()
+            d_q = {int(m.id()): float(m.q())       for m in seq}
+            d_tau = {int(m.id()): float(m.tau_est()) for m in seq}
+            self._latest_hand.set((d_q, d_tau))
+
         self._low_sub = igc_sdk.LowStateSubscriber(self._state_factory, topics["lowstate"])
-        self._low_sub.init(lambda msg: self._latest_low.set(msg))
+        self._low_sub.init(_on_low)
 
         self._hand_sub = igc_sdk.HandStateSubscriber(self._state_factory, topics["handstate"])
-        self._hand_sub.init(lambda msg: self._latest_hand.set(msg))
+        self._hand_sub.init(_on_hand)
 
         for key, topic_key in (
             ("head", "head_camera"),
@@ -194,19 +228,16 @@ class ControllerBridge:
         low = self._latest_low.get()
         hand = self._latest_hand.get()
 
-        body_q = np.zeros(PROPRIO_BODY_Q_DIM, dtype=np.float32)
-        body_tau = np.zeros(PROPRIO_BODY_TAU_DIM, dtype=np.float32)
         if low is not None:
-            ms = low.motor_state()
-            for i in range(PROPRIO_BODY_Q_DIM):
-                body_q[i] = float(ms[i].q())
-                body_tau[i] = float(ms[i].tau_est())
+            body_q, body_tau = low
+        else:
+            body_q = np.zeros(PROPRIO_BODY_Q_DIM, dtype=np.float32)
+            body_tau = np.zeros(PROPRIO_BODY_TAU_DIM, dtype=np.float32)
 
         hand_q = np.zeros(PROPRIO_HAND_Q_DIM, dtype=np.float32)
         hand_tau = np.zeros(PROPRIO_HAND_TAU_DIM, dtype=np.float32)
         if hand is not None:
-            id_to_q = {int(m.id()): float(m.q()) for m in hand.motor_state()}
-            id_to_tau = {int(m.id()): float(m.tau_est()) for m in hand.motor_state()}
+            id_to_q, id_to_tau = hand
             for k, mid in enumerate(HAND_MOTOR_IDS):
                 hand_q[k] = id_to_q.get(mid, 0.0)
                 hand_tau[k] = id_to_tau.get(mid, 0.0)
@@ -223,6 +254,7 @@ class ControllerBridge:
             raw = np.frombuffer(payload, dtype=np.uint8)
             frame = cv2.imdecode(raw, cv2.IMREAD_COLOR)
             if frame is None:
+                print(f"{key} image is None !!", flush=True)
                 out[key] = np.zeros((3, self._mono_h, target_w), dtype=np.uint8)
                 continue
             frame = cv2.resize(frame, (target_w, self._mono_h), interpolation=cv2.INTER_AREA)
@@ -270,7 +302,11 @@ class ControllerBridge:
 
         cmd = igc_sdk.LowCmd()
         cmd.motors(motors)
-        cmd.kinematic_modes([igc_sdk.KinematicMode.MS] * 5)
+        # PJS (Parallel Joint Space) matches the recorder
+        # (igris_c_fixer_record/record/src/core/lowcmd_bridge.py uses
+        # KinematicMode.PJS for every LowCmd it publishes); the policy is
+        # trained against PJS observations and outputs PJS targets.
+        cmd.kinematic_modes([igc_sdk.KinematicMode.PJS] * 5)
         self._lowcmd_pub.write(cmd)
 
     def _publish_handcmd(self, left_val: float, right_val: float):
