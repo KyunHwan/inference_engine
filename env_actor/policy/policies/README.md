@@ -1,40 +1,38 @@
 # policies
 
-Concrete policy implementations. Each policy lives in its own subdirectory following the convention `{name}/{name}.py` + `{name}.yaml`.
+**Parent:** [policy](../README.md)
 
-## Current Policies
+Concrete policy implementations. Each lives in its own subdirectory.
 
-### `openpi_policy`
+## Currently shipped
 
-Wraps the OpenPI (Pi0.5) vision-language-action model for inference on IGRIS robots.
+| Directory | Class | Registry key | Notes |
+|---|---|---|---|
+| [`openpi_policy/`](openpi_policy/README.md) | `OpenPiPolicy` | `openpi_policy` | Single-component wrapper for OpenPI/Pi0.5. |
+| [`dsrl_openpi_policy/`](dsrl_openpi_policy/README.md) | `DsrlOpenpiPolicy` | `dsrl_openpi_policy` | Four-component pipeline: backbone → noise processor → noise actor → OpenPI. The default policy for [run_inference.py](../../../run_inference.py). |
 
-**Files:**
-- `openpi_policy/openpi_policy.py` — Policy class registered as `"openpi_policy"` in `POLICY_REGISTRY`
-- `openpi_policy/openpi_policy.yaml` — Top-level policy config pointing to the component YAML
-- `openpi_policy/components/openpi_batched.yaml` — Model architecture config (checkpoint path, action dimensions, inference steps)
+## Directory convention
 
-**How it works:**
-- Receives an `OpenPiBatchedWrapper` built by the model factory as a component
-- Converts single-sample observations to batched format (adds batch dimension of 1)
-- Delegates inference to the wrapper's `predict()` method
-- For `guided_inference()`, computes action inpainting weights via `compute_guided_prefix_weights()` and blends the previous action chunk with the new prediction
-
-**Key parameters** (from `openpi_batched.yaml`):
-- `action_dim: 24` — 24-DOF action space (12 arm joints + 12 hand joints)
-- `action_horizon: 50` — 50-step action chunk
-- `num_inference_steps: 10` — flow-matching denoising steps
-
-## Directory Convention
-
-To add a new policy, create:
+Adding a new policy:
 
 ```
 policies/
 └── your_policy/
-    ├── your_policy.py           # @POLICY_REGISTRY.register("your_policy")
-    ├── your_policy.yaml         # policy.type: your_policy
+    ├── __init__.py           # Can be empty
+    ├── your_policy.py        # @POLICY_REGISTRY.register("your_policy")
+    ├── your_policy.yaml      # policy.type: your_policy
     └── components/
-        └── your_model.yaml      # Model architecture config
+        └── your_model.yaml   # Architecture config consumed by PolicyConstructorModelFactory
 ```
 
-The `policy.type` field in the YAML must match the registry key used in the `@POLICY_REGISTRY.register()` decorator.
+The string in `@POLICY_REGISTRY.register("...")` must match `policy.type` in the YAML.
+
+## How `build_policy` finds your code
+
+If `your_policy` isn't yet in `POLICY_REGISTRY`, [`build_policy`](../utils/loader.py) auto-imports `env_actor.policy.policies.your_policy.your_policy`. So the file naming must follow the convention exactly.
+
+## Related docs
+
+- [docs/walkthroughs/03_add_a_new_policy.md](../../../docs/walkthroughs/03_add_a_new_policy.md) — the worked copy-and-modify walkthrough.
+- [docs/api.md § build_policy](../../../docs/api.md#build_policy)
+- [policy_constructor MENTAL_MODEL.md](https://github.com/KyunHwan/policy_constructor/blob/00663cc10c91d7614c1a0ea3d68629c38767b167/docs/MENTAL_MODEL.md) — how each component YAML becomes an `nn.Module`.
