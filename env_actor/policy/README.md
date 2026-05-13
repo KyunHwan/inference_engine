@@ -1,21 +1,29 @@
 # policy
 
-Policy loading, registration, and protocol definition. This package defines how inference policies are structured, discovered, and instantiated from YAML configuration.
+**Parent:** [env_actor](../README.md)
 
-## Key Files
+Policy loading, registration, and protocol definition. Everything inference-time about a policy lives here.
 
-| Path | Purpose |
+## Table of contents
+
+- [Subdirectories](#subdirectories)
+- [The Policy protocol](#the-policy-protocol)
+- [How build_policy works](#how-build_policy-works)
+- [Adding a new policy](#adding-a-new-policy)
+- [Related docs](#related-docs)
+
+## Subdirectories
+
+| Directory | Purpose |
 |---|---|
-| `templates/policy.py` | `Policy` protocol — the interface all policies must satisfy |
-| `registry/core.py` | Generic `Registry` class with optional base-class enforcement |
-| `registry/__init__.py` | `POLICY_REGISTRY` global instance |
-| `utils/loader.py` | `build_policy()` — YAML config → instantiated policy |
-| `utils/weight_transfer.py` | CPU → GPU state dict transfer utility |
-| `policies/` | Concrete policy implementations |
+| [`templates/`](templates/README.md) | The `Policy` protocol — the structural-subtyping interface every policy must satisfy. |
+| [`registry/`](registry/README.md) | `POLICY_REGISTRY` — the string-keyed lookup used by `build_policy`. |
+| [`utils/`](utils/README.md) | `build_policy` (YAML → policy instance), `load_state_dict_cpu_into_module`. |
+| [`policies/`](policies/README.md) | Concrete implementations: `openpi_policy`, `dsrl_openpi_policy`. |
 
-## The Policy Protocol
+## The Policy protocol
 
-Defined in `templates/policy.py` using Python's `Protocol` (structural subtyping — no inheritance required):
+Defined in [`templates/policy.py`](templates/policy.py) using Python's `Protocol` (structural subtyping — no inheritance required):
 
 ```python
 @runtime_checkable
@@ -23,78 +31,69 @@ class Policy(Protocol):
     def __init__(self, components: dict[str, nn.Module], **kwargs) -> None: ...
     def predict(self, input_data: dict, data_normalization_interface) -> np.ndarray: ...
     def guided_inference(self, input_data: dict, data_normalization_interface,
-                         min_num_actions_executed, action_chunk_size) -> np.ndarray: ...
+                         min_num_actions_executed: int, action_chunk_size: int) -> np.ndarray: ...
     def warmup(self) -> None: ...
     def freeze_all_model_params(self) -> None: ...
 ```
 
-| Method | Used By | Purpose |
+| Method | Used by | Purpose |
 |---|---|---|
-| `predict()` | Sequential algorithm | Standard single-shot inference |
-| `guided_inference()` | RTC algorithm | Inference with action inpainting (blends previous chunk with new prediction) |
-| `warmup()` | Both | CUDA kernel warmup via `torch.compile` / `cudnn.benchmark` |
-| `freeze_all_model_params()` | Both | Freeze parameters for inference-only mode |
+| `predict()` | [Sequential](../auto/inference_algorithms/sequential/README.md) | Standard single-shot inference |
+| `guided_inference()` | [RTC](../auto/inference_algorithms/rtc/README.md) | Inference with action inpainting |
+| `warmup()` | Both | CUDA kernel warmup; triggers `torch.compile` |
+| `freeze_all_model_params()` | Both (optional) | Disable `requires_grad` to skip gradient memory |
 
-### Input/Output Shapes
+Full I/O shapes: [docs/api.md § Policy protocol](../../docs/api.md#policy-protocol).
 
-**`predict()` input (`input_data` dict):**
-- `"proprio"`: `(proprio_history_size, state_dim)` float32
-- `"head"`, `"left"`, `"right"`: `(num_img_obs, 3, H, W)` uint8
-- `"prompt"` (optional): string
+## How build_policy works
 
-**`guided_inference()` additional inputs:**
-- `"est_delay"`: int — estimated inference latency in control steps
-- `"prev_action"`: `(action_chunk_size, action_dim)` float32 — previous un-executed actions
+[`utils/loader.py`](utils/loader.py) → `build_policy(policy_yaml_path, map_location="cpu")`:
 
-**Return:** `np.ndarray` of shape `(action_chunk_size, action_dim)` float32
+1. **Load YAML** via `load_policy_config()` (delegating to the trainer's config loader, which handles `defaults` composition).
+2. **Resolve component paths** — entries in `model.component_config_paths` are resolved against the policy YAML's directory.
+3. **Build model components** — `PolicyConstructorModelFactory.build(resolved_paths)` returns a `dict[str, nn.Module]`.
+4. **Load checkpoints** (optional) — if `config["checkpoint_path"]` is set, `torch.load(checkpoint_path/<name>.pt, map_location=...)` for each component.
+5. **Resolve policy class** — looks up `policy.type` in `POLICY_REGISTRY`. If missing, auto-imports `env_actor.policy.policies.<type>.<type>` (which will register on import).
+6. **Instantiate** — `policy_cls(components=components, **policy_params)`.
 
-## How `build_policy()` Works
+## Adding a new policy
 
-`utils/loader.py` → `build_policy(policy_yaml_path, map_location="cpu")`:
+1. Create `policies/your_policy/your_policy.py`.
+2. Decorate the class:
 
-1. **Load YAML** — calls `load_policy_config()` (delegating to the trainer's config loader)
-2. **Resolve component paths** — relative paths are resolved against the YAML file's directory
-3. **Build model components** — uses `PolicyConstructorModelFactory` from the trainer submodule to build `nn.Module` components from component YAML configs
-4. **Load checkpoints** — if `checkpoint_path` is set, loads `{component_name}.pt` state dicts
-5. **Instantiate policy** — looks up `policy.type` in `POLICY_REGISTRY`; if not registered, auto-imports `env_actor.policy.policies.{type}.{type}`
+   ```python
+   from env_actor.policy.registry import POLICY_REGISTRY
 
-## Adding a New Policy
-
-1. Create `policies/your_policy/your_policy.py`
-2. Register with the decorator:
-
-```python
-from env_actor.policy.registry import POLICY_REGISTRY
-
-@POLICY_REGISTRY.register("your_policy")
-class YourPolicy:
-    def __init__(self, components, **kwargs):
-        self.model = next(iter(components.values()))
-
-    def predict(self, input_data, data_normalization_interface):
-        ...  # Return (action_chunk_size, action_dim) np.ndarray
-
-    def guided_inference(self, input_data, data_normalization_interface,
-                         min_num_actions_executed, action_chunk_size):
-        ...  # Return (action_chunk_size, action_dim) np.ndarray
-
-    def warmup(self):
-        pass
-
-    def freeze_all_model_params(self):
-        for p in self.model.parameters():
-            p.requires_grad = False
-```
+   @POLICY_REGISTRY.register("your_policy")
+   class YourPolicy:
+       def __init__(self, components, **kwargs):
+           self.model = next(iter(components.values()))
+       def predict(self, input_data, data_normalization_interface): ...
+       def guided_inference(self, input_data, data_normalization_interface,
+                            min_num_actions_executed, action_chunk_size): ...
+       def warmup(self): pass
+       def freeze_all_model_params(self):
+           for p in self.model.parameters():
+               p.requires_grad = False
+   ```
 
 3. Create `policies/your_policy/your_policy.yaml`:
 
-```yaml
-model:
-  component_config_paths:
-    main: components/your_model.yaml
+   ```yaml
+   model:
+     component_config_paths:
+       main: components/your_model.yaml
+   policy:
+     type: your_policy
+   ```
 
-policy:
-  type: your_policy
-```
+4. Run: `python run_inference.py --robot igris_b -P env_actor/policy/policies/your_policy/your_policy.yaml`.
 
-4. Run with: `python run_inference.py --robot igris_b -P env_actor/policy/policies/your_policy/your_policy.yaml`
+Full walkthrough: [docs/walkthroughs/03_add_a_new_policy.md](../../docs/walkthroughs/03_add_a_new_policy.md).
+
+## Related docs
+
+- [docs/api.md § Policy protocol](../../docs/api.md#policy-protocol) and [§ build_policy](../../docs/api.md#build_policy)
+- [docs/walkthroughs/03_add_a_new_policy.md](../../docs/walkthroughs/03_add_a_new_policy.md)
+- [docs/concepts.md § What is a VLA policy?](../../docs/concepts.md#what-is-a-vla-policy)
+- [policy_constructor MENTAL_MODEL.md](https://github.com/KyunHwan/policy_constructor/blob/00663cc10c91d7614c1a0ea3d68629c38767b167/docs/MENTAL_MODEL.md) — how YAML becomes `nn.Module`
