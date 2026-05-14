@@ -48,6 +48,7 @@ A distributed, real-time inference engine for running vision-language-action (VL
 | Get unstuck on a common question | [docs/faq.md](docs/faq.md) |
 | Look up a term | [docs/glossary.md](docs/glossary.md) |
 | Browse all docs | [docs/README.md](docs/README.md) |
+| **You are on the `igris_c/c1` branch** — get the IGRIS_C robot running | [docs/igris_c_c1/README.md](docs/igris_c_c1/README.md) |
 
 ## Repository layout
 

@@ -14,6 +14,8 @@ The complete documentation set for the inference engine. Start at the top if you
 
 ## Start here
 
+> **On the `igris_c/c1` branch?** Read [igris_c_c1/README.md](igris_c_c1/README.md) first — it documents the branch-specific changes (IGRIS_C controller bridge, runtime configs, data managers, `run_inference_local.py`) and walks you from `git clone` to running inference on IGRIS_C. The numbered docs below remain the reference for everything that did not change between `main` and `igris_c/c1`.
+
 If this is your first time in the repo, read in this order:
 
 1. [Onboarding](onboarding.md) — day-by-day plan for your first week. Includes commands, expected outputs, and pointers to deeper material.
@@ -26,6 +28,7 @@ If this is your first time in the repo, read in this order:
 
 | I want to… | Read |
 |---|---|
+| Onboard onto the `igris_c/c1` branch (IGRIS_C robot) | [igris_c_c1/README.md](igris_c_c1/README.md) |
 | Spend my first day in the repo | [onboarding.md](onboarding.md) |
 | Build a mental model | [concepts.md](concepts.md) |
 | Run my first inference | [walkthroughs/01_first_run.md](walkthroughs/01_first_run.md) |
